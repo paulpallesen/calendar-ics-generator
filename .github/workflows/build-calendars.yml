@@ -1,35 +1,80 @@
 name: Build Calendars
 
 permissions:
-  contents: write
+  contents: write     # needed for gh-pages push
   pages: write
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'   # daily at 00:00 UTC (adjust as you like)
+  # Optional: also build on pushes that touch relevant files
+  push:
+    branches: [ main ]
+    paths:
+      - "build_calendars.py"
+      - "requirements.txt"
+      - ".github/workflows/build-calendars.yml"
+      - "public/**"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      # Prefer a repo secret named CSV_URL. We'll also set a shell fallback below.
+      CSV_URL: ${{ secrets.CSV_URL }}
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          python - <<'PY'
+import sys, pandas, ics, openpyxl
+print("✅ Python:", sys.version)
+print("✅ pandas:", pandas.__version__)
+print("✅ ics:", ics.__version__)
+print("✅ openpyxl:", openpyxl.__version__)
+PY
+
       - name: Run build
-        env:
-          CSV_URL: ${{ secrets.CSV_URL || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwoBRBFI-z4haeZv0WMruMzGmebRVPIa-pYOzbMVBX9Si9iQa8VMBzkoYjWt8VRck6OB9853xSSPzM/pub?gid=0&output=csv' }}
-        run: python build_calendars.py
-      - name: Check if ICS files exist
-        run: ls -l public/calendars/
-      - name: Deploy to GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Shell-level fallback for CSV_URL if the secret isn't set
+          : "${CSV_URL:=https://docs.google.com/spreadsheets/d/e/2PACX-1vRwoBRBFI-z4haeZv0WMruMzGmebRVPIa-pYOzbMVBX9Si9iQa8VMBzkoYjWt8VRck6OB9853xSSPzM/pub?gid=0&output=csv}"
+          echo "Using CSV_URL: ${CSV_URL}"
+          python build_calendars.py
+          # Ensure site root exists and has an index.html
+          mkdir -p public
+          if [ ! -f public/index.html ]; then
+            cat > public/index.html <<'HTML'
+<!doctype html><meta charset="utf-8"><title>Calendar Feeds</title>
+<h1>Calendar Feeds</h1>
+<p><a href="calendars.json">calendars.json</a></p>
+HTML
+          fi
+
+      - name: Verify output (fail clearly if empty)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Listing public/…"
+          find public -maxdepth 2 -type f -print | sed 's/^/  /' || true
+          test -n "$(ls -1 public/calendars/*.ics 2>/dev/null)" || { echo "❌ No ICS files in public/calendars/"; exit 1; }
+
+      - name: Deploy to GitHub Pages (gh-pages branch)
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+          publish_branch: gh-pages
+          enable_jekyll: false
