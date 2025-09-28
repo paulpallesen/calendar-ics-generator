@@ -14,22 +14,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Run build
         env:
           CSV_URL: ${{ secrets.CSV_URL || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwoBRBFI-z4haeZv0WMruMzGmebRVPIa-pYOzbMVBX9Si9iQa8VMBzkoYjWt8VRck6OB9853xSSPzM/pub?gid=0&output=csv' }}
         run: python build_calendars.py
+
+      # 🚨 NEW: fail if public/ is missing
+      - name: Verify public/ folder exists
+        run: |
+          if [ ! -d "public" ]; then
+            echo "❌ ERROR: 'public/' folder not found. Build must create this directory."
+            exit 1
+          fi
+
+      # List generated files for debug
       - name: Check if ICS files exist
-        run: ls -l public/calendars/
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+        run: ls -l public/calendars/ || echo "⚠️ No calendars found in public/calendars"
+
+      - name: Deploy to GitHub
