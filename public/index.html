@@ -1,75 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Subscribe to Calendars</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscribe to Calendar</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js">
     <style>
-        body {
-            font-family: sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 1em;
-            line-height: 1.5;
-        }
-        select, button {
-            padding: 0.5em 1em;
-            margin: 0.25em 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 1em;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        select {
-            appearance: auto; /* Ensure native dropdown styling */
-            position: relative;
-            z-index: 1; /* Keep dropdown above other elements */
-        }
-        button {
-            cursor: pointer;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.5em;
-            font-weight: bold;
-        }
-        #buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5em;
-        }
-        #qr-section {
-            margin-top: 1em;
-            text-align: center;
-        }
-        #qr-canvas {
-            border: 1px solid #ccc;
-            margin: 0.5em auto;
-            display: block;
-        }
-        @media (max-width: 480px) {
-            #buttons {
-                flex-direction: column;
-            }
-        }
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        select { padding: 10px; font-size: 16px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border-radius: 5px; }
+        #qr-section { margin-top: 20px; }
     </style>
 </head>
 <body>
     <h1>Subscribe to Calendar</h1>
-    <label for="calendar-select">Choose calendar:</label>
-    <select id="calendar-select" aria-label="Select calendar"></select>
+    <select id="calendar-select" style="appearance: auto; position: relative;">
+        <option value="" disabled selected>Select a calendar</option>
+    </select>
     <div id="buttons"></div>
     <div id="qr-section">
-        <h2>QR Code for Subscription</h2>
-        <canvas id="qr-canvas"></canvas>
-        <p>Scan to subscribe directly.</p>
+        <canvas id="qr-canvas" style="display: none;"></canvas>
     </div>
     <script>
-        fetch('/calendars.json')
-            .then(r => r.json())
+        fetch('https://paulpallesen.github.io/calendar-ics-generator/calendars.json')
+            .then(r => {
+                if (!r.ok) {
+                    throw new Error(`HTTP error! status: ${r.status}`);
+                }
+                return r.json();
+            })
             .then(data => {
+                console.log('Calendars data loaded:', data);
                 const select = document.getElementById('calendar-select');
                 data.forEach(cal => {
                     const opt = document.createElement('option');
@@ -84,15 +45,15 @@
                 select.addEventListener('change', updateButtons);
             })
             .catch(err => {
-                document.getElementById('buttons').innerHTML = '<p>Error loading calendars.</p>';
-                console.error('Failed to load calendars.json:', err);
+                console.error('Fetch error:', err);
+                document.getElementById('buttons').innerHTML = '<p>Error loading calendars. Check console for details.</p>';
             });
 
         function updateButtons() {
             const select = document.getElementById('calendar-select');
             if (!select.value) return;
             const val = JSON.parse(select.value);
-            const baseUrl = `${location.protocol === 'https:' ? 'https:' : 'http:'}//${location.host}`;
+            const baseUrl = 'https://paulpallesen.github.io/calendar-ics-generator';
             const icsUrl = baseUrl + val.ics;
             const encodedIcs = encodeURIComponent(icsUrl);
             const encodedName = encodeURIComponent(val.name);
@@ -104,7 +65,6 @@
                 <button onclick="window.open('https://outlook.office.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (work/school)</button>
                 <button onclick="copyLink('${icsUrl}')" style="background:#666666;color:white;border-color:#666666;">Copy Subscription Link</button>
             `;
-            // Generate QR with fallback
             const canvas = document.getElementById('qr-canvas');
             const qrSection = document.getElementById('qr-section');
             if (typeof QRCode !== 'undefined') {
@@ -133,5 +93,3 @@
             });
         }
     </script>
-</body>
-</html>
