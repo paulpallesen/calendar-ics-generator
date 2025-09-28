@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 from ics import Calendar, Event
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
