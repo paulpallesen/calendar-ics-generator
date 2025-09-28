@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Subscribe to Calendars</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 1em;
+            line-height: 1.5;
+        }
+        select, button {
+            padding: 0.5em 1em;
+            margin: 0.25em 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        select {
+            appearance: auto; /* Ensure native dropdown styling */
+            position: relative;
+            z-index: 1; /* Keep dropdown above other elements */
+        }
+        button {
+            cursor: pointer;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5em;
+            font-weight: bold;
+        }
+        #buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5em;
+        }
+        #qr-section {
+            margin-top: 1em;
+            text-align: center;
+        }
+        #qr-canvas {
+            border: 1px solid #ccc;
+            margin: 0.5em auto;
+            display: block;
+        }
+        @media (max-width: 480px) {
+            #buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Subscribe to Calendar</h1>
+    <label for="calendar-select">Choose calendar:</label>
+    <select id="calendar-select" aria-label="Select calendar"></select>
+    <div id="buttons"></div>
+    <div id="qr-section">
+        <h2>QR Code for Subscription</h2>
+        <canvas id="qr-canvas"></canvas>
+        <p>Scan to subscribe directly.</p>
+    </div>
+    <script>
+        fetch('/calendars.json')
+            .then(r => r.json())
+            .then(data => {
+                const select = document.getElementById('calendar-select');
+                data.forEach(cal => {
+                    const opt = document.createElement('option');
+                    opt.value = JSON.stringify({name: cal.name, ics: cal.ics});
+                    opt.textContent = cal.name;
+                    select.appendChild(opt);
+                });
+                if (data.length > 0) {
+                    select.value = JSON.stringify({name: data[0].name, ics: data[0].ics});
+                    updateButtons();
+                }
+                select.addEventListener('change', updateButtons);
+            })
+            .catch(err => {
+                document.getElementById('buttons').innerHTML = '<p>Error loading calendars.</p>';
+                console.error('Failed to load calendars.json:', err);
+            });
+
+        function updateButtons() {
+            const select = document.getElementById('calendar-select');
+            if (!select.value) return;
+            const val = JSON.parse(select.value);
+            const baseUrl = `${location.protocol === 'https:' ? 'https:' : 'http:'}//${location.host}`;
+            const icsUrl = baseUrl + val.ics;
+            const encodedIcs = encodeURIComponent(icsUrl);
+            const encodedName = encodeURIComponent(val.name);
+            const buttonsDiv = document.getElementById('buttons');
+            buttonsDiv.innerHTML = `
+                <button onclick="window.location.href='webcal://${location.host}${val.ics}'" style="background:#333333;color:white;border-color:#333333;">Apple (iCal)</button>
+                <button onclick="window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=${encodedIcs}', '_blank')" style="background:#1A73E8;color:white;border-color:#1A73E8;">Google Calendar</button>
+                <button onclick="window.open('https://outlook.live.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (personal)</button>
+                <button onclick="window.open('https://outlook.office.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (work/school)</button>
+                <button onclick="copyLink('${icsUrl}')" style="background:#666666;color:white;border-color:#666666;">Copy Subscription Link</button>
+            `;
+            // Generate QR with fallback
+            const canvas = document.getElementById('qr-canvas');
+            const qrSection = document.getElementById('qr-section');
+            if (typeof QRCode !== 'undefined') {
+                QRCode.toCanvas(canvas, icsUrl, { width: 200, margin: 1 }, (error) => {
+                    if (error) {
+                        console.error('QR Code generation failed:', error);
+                        qrSection.innerHTML = '<p>Unable to generate QR code. Use the subscription link instead.</p>';
+                    } else {
+                        canvas.style.display = 'block';
+                    }
+                });
+            } else {
+                console.warn('QRCode library not loaded; QR code will not display.');
+                qrSection.innerHTML = '<p>Unable to generate QR code. Use the subscription link instead.</p>';
+            }
+        }
+
+        function copyLink(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = event.target;
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = original; }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy link:', err);
+            });
+        }
+    </script>
+</body>
+</html>
