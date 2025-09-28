@@ -1,5 +1,9 @@
 name: Build Calendars
 
+permissions:
+  contents: write
+  pages: write
+
 on:
   workflow_dispatch:
   schedule:
