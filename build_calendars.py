@@ -6,8 +6,7 @@ import logging
 import pandas as pd
 from datetime import timedelta
 from zoneinfo import ZoneInfo
-from ics import Calendar, Event, ContentLine
-from pathlib import Path
+from ics import Calendar, Event
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -65,8 +64,8 @@ except Exception as e:
 
 # Clean and prepare columns
 df = df.dropna(subset=['Calendar', 'Title'])
-df['Start Date'] = pd.to_datetime(df['Start Date'], errors='coerce', dayfirst=True)  # Fix for DD/MM/YYYY
-df['End Date'] = pd.to_datetime(df['End Date'], errors='coerce', dayfirst=True)  # Fix for DD/MM/YYYY
+df['Start Date'] = pd.to_datetime(df['Start Date'], errors='coerce', dayfirst=True)
+df['End Date'] = pd.to_datetime(df['End Date'], errors='coerce', dayfirst=True)
 df['Start Time'] = df['Start Time'].astype(str).str.strip()
 df['End Time'] = df['End Time'].astype(str).str.strip()
 df['has_time_start'] = (df['Start Time'] != '') & (df['Start Time'] != 'nan') & df['Start Date'].notna()
@@ -93,7 +92,7 @@ for name, group in grouped:
         logger.warning(f"Skipping calendar '{name}' due to invalid slug.")
         continue
     cal = Calendar()
-    cal.extra.append(ContentLine(name='X-WR-CALNAME', value=str(name)))  # Set calendar name for Google/others
+    cal.extra.append(('X-WR-CALNAME', str(name)))  # Set calendar name for Google/others
     count = 0
     skipped_in_group = 0
     for idx, row in group.iterrows():

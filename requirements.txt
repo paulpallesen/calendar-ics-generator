@@ -1,4 +1,2 @@
-pandas==2.2.2
-ics==0.7.2
-openpyxl==3.1.5
-pytest==7.4.4
+pandas
+ics>=0.8.0
