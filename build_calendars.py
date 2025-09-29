@@ -7,7 +7,6 @@ import pandas as pd
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 from ics import Calendar, Event
-from ics.parse import ContentLine  # Correct import for ics>=0.8.0
 from pathlib import Path
 
 # Configure logging
@@ -99,8 +98,8 @@ for name, group in grouped:
         continue
     
     cal = Calendar()
-    cal.extra.append(ContentLine(name='X-WR-CALNAME', value=str(name)))  # Use ContentLine
-    cal.extra.append(ContentLine(name='X-WR-TIMEZONE', value='Australia/Sydney'))  # Use ContentLine
+    cal.extra.append(('X-WR-CALNAME', str(name)))  # Compatible with ics==0.7.2
+    cal.extra.append(('X-WR-TIMEZONE', 'Australia/Sydney'))  # Compatible with ics==0.7.2
     
     count = 0
     skipped_in_group = 0
