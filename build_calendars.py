@@ -104,7 +104,6 @@ for name, group in grouped:
             if not event.name:
                 skipped_in_group += 1
                 continue
-
             # Determine if timed or all-day
             is_timed = row['has_time_start'] or row['has_time_end']
             if is_timed:
@@ -116,4 +115,81 @@ for name, group in grouped:
                     continue
                 if pd.notna(row['End Date']):
                     end_time_str = row['End Time'] if row['has_time_end'] else '00:00:00'
-                    event.end = parse_dt_str(row['End Date'], end_time
+                    event.end = parse_dt_str(row['End Date'], end_time_str, tz)
+                else:
+                    event.end = event.begin + timedelta(hours=1)
+            else:
+                # All-day event
+                event.begin = row['Start Date'].date()
+                if pd.notna(row['End Date']):
+                    event.end = row['End Date'].date() + timedelta(days=1)
+                else:
+                    event.end = event.begin + timedelta(days=1)
+
+            # Adjust if end <= begin
+            if event.end <= event.begin:
+                adjustment = timedelta(hours=1) if is_timed else timedelta(days=1)
+                logger.warning(f"Adjusted end for event '{event.name}' (row {idx}) as it was not after begin: from {event.end} to {event.begin + adjustment}")
+                event.end = event.begin + adjustment
+
+            # Optional fields
+            location = clean_str(row.get('Location'))
+            if location:
+                event.location = location
+            desc = clean_str(row.get('Description'))
+            if desc:
+                event.description = desc
+            url = clean_str(row.get('URL'))
+            if url:
+                event.url = url
+
+            # UID (Outlook-friendly email format)
+            uid = clean_str(row.get('UID'))
+            if not uid:
+                event.uid = make_uid(row['Title'], event.begin, event.end, location)
+            else:
+                event.uid = uid
+
+            # Transparent
+            trans = clean_str(row.get('Transparent'))
+            if trans and trans.lower() in ['true', 'yes', '1']:
+                event.transparency = 'TRANSPARENT'
+
+            cal.events.add(event)
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to process event in calendar '{name}', row index {idx}: {e}")
+            skipped_in_group += 1
+            continue
+
+    if count > 0:
+        try:
+            ics_path = f"public/calendars/{slug}.ics"
+            with open(ics_path, 'w') as f:
+                f.write(cal.serialize())  # Updated to use serialize()
+            calendars_list.append({
+                "name": str(name),
+                "slug": slug,
+                "ics": f"/calendars/{slug}.ics"
+            })
+            logger.info(f"Generated {count} events for '{name}' ({slug}) (skipped {skipped_in_group} in group).")
+            total_processed += count
+        except Exception as e:
+            logger.error(f"Failed to write ICS for '{name}': {e}")
+    else:
+        logger.warning(f"No valid events generated for '{name}'.")
+
+# Validation summary
+logger.info(f"Total processed: {total_processed} out of {valid_count} valid rows from sheet (overall skipped: {valid_count - total_processed}).")
+
+if calendars_list:
+    try:
+        with open('public/calendars.json', 'w') as f:
+            json.dump(calendars_list, f)
+        logger.info(f"Generated calendars.json with {len(calendars_list)} calendars.")
+    except Exception as e:
+        logger.error(f"Failed to write calendars.json: {e}")
+else:
+    logger.warning("No calendars generated.")
+
+logger.info("Build complete.")
