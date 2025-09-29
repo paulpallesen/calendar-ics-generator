@@ -1,0 +1,21 @@
+name: Test Public Folder
+
+on:
+  workflow_dispatch:  # allows manual run from Actions tab
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show repo structure
+        run: |
+          echo "Repo structure (public folder only):"
+          find public -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
+
+      - name: Show file details
+        run: |
+          echo "Detailed file listing:"
+          ls -lR public
+
