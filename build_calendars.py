@@ -93,8 +93,8 @@ for name, group in grouped:
         logger.warning(f"Skipping calendar '{name}' due to invalid slug.")
         continue
     cal = Calendar()
-    cal.extra.append(f"X-WR-CALNAME:{name}")  # Set calendar name for Google/others
-    cal.extra.append(f"X-WR-TIMEZONE:Australia/Sydney")  # Explicit timezone for Outlook
+    cal.extra.append(('X-WR-CALNAME', str(name)))  # Set calendar name for Google/others
+    cal.extra.append(('X-WR-TIMEZONE', 'Australia/Sydney'))  # Explicit timezone for Outlook
     count = 0
     skipped_in_group = 0
     for idx, row in group.iterrows():
@@ -167,7 +167,7 @@ for name, group in grouped:
         try:
             ics_path = f"public/calendars/{slug}.ics"
             with open(ics_path, 'w') as f:
-                f.write(cal.serialize())  # Fixed to serialize()
+                f.write(cal.serialize())
             calendars_list.append({
                 "name": str(name),
                 "slug": slug,
