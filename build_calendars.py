@@ -275,8 +275,8 @@ index_html = r"""<!doctype html>
 <title>Subscribe to Calendars</title>
 <style>
 :root{
-  --apple:#333; --google:#1A73E8; --outlook:#0078D4;
-  --bg:#0b0f1a; --card:#121826; --text:#e6eaf2; --muted:#9aa4b2; --accent:#2dd4bf;
+  --apple:#333; --google:#ea4b3e; --outlook:#0078D4;
+  --bg:#ffffff; --card:#400316; --text:#e6eaf2; --muted:#9aa4b2; --accent:#410317;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;background:var(--bg);color:var(--text)}
