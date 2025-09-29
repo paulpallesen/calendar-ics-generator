@@ -1,13 +1,14 @@
 name: Build Calendars
 
-permissions:
-  contents: write
-  pages: write
-
 on:
-  workflow_dispatch:      # manual run option
+  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'   # daily at 00:00 UTC
+    - cron: '0 0 * * *'  # daily at 00:00 UTC
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -33,29 +34,27 @@ jobs:
       - name: Verify public/ exists
         run: |
           if [ ! -d "public" ]; then
-            echo "❌ ERROR: 'public/' folder does not exist"
+            echo "❌ ERROR: 'public/' folder not found. Build must create this directory."
             exit 1
           fi
-          if [ -z "$(ls -A public)" ]; then
-            echo "❌ ERROR: 'public/' folder is empty"
-            exit 1
-          fi
-          echo "✅ public/ folder has content"
 
       - name: List generated files
         run: |
           echo "Contents of public/:"
           find public -maxdepth 2 -type f -print | sed 's/^/  /' || true
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          publish_branch: gh-pages
-          enable_jekyll: false
+          path: ./public
 
-      - name: Show deployed site URL
-        run: |
-          echo "✅ Your site should now be available at:"
-          echo "https://paulpallesen.github.io/calendar-ics-generator/"
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
