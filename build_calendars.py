@@ -11,6 +11,7 @@ from hashlib import md5
 import requests
 import pandas as pd
 from ics import Calendar, Event
+from ics.grammar.parse import ContentLine  # ✅ ADDED
 
 # ------------------ Config ------------------
 DAYFIRST = True                     # interpret dates as DD/MM/YYYY
@@ -109,7 +110,7 @@ col_desc     = first_col(df, ["Description", "Details", "Notes"])
 col_url      = first_col(df, ["URL", "Link"])
 col_uid      = first_col(df, ["UID", "Uid"])
 col_allday   = first_col(df, ["All Day", "All-day", "AllDay"])
-# ✅ NEW: resolve transparency column (TRUE => FREE)
+# ✅ resolve transparency column (TRUE => FREE)
 col_transp   = first_col(df, ["Transparent", "FreeBusy", "Show As", "ShowAs", "Transparency"])
 
 missing_keys = []
@@ -144,7 +145,8 @@ for cal_name in cal_order:
         continue
 
     cal = Calendar()
-    cal.extra.append(["X-WR-CALNAME", cal_name])  # Apple default display name inside the ICS
+    # ✅ Use ContentLine for X-WR-CALNAME so ics lib can serialize it
+    cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
     created = 0
 
     for _, r in subset.iterrows():
@@ -209,7 +211,7 @@ for cal_name in cal_order:
         if col_desc: ev.description = clean_str(r.get(col_desc)) or None
         if col_url:  ev.url         = clean_str(r.get(col_url)) or None
 
-        # ✅ NEW: map transparency so TRUE => FREE (does not block)
+        # ✅ Map transparency so TRUE => FREE (does not block)
         if col_transp:
             raw = str(r.get(col_transp)).strip().lower()
             if raw in ("true", "1", "yes", "y", "free", "transparent"):
