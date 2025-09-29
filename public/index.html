@@ -18,7 +18,6 @@
             margin: 0.25em;
             border: 1px solid #ccc;
             border-radius: 4px;
-            font-size: 1em;
         }
         button {
             cursor: pointer;
@@ -40,7 +39,7 @@
         #qr-canvas {
             border: 1px solid #ccc;
             margin: 0.5em auto;
-            display: block;
+            display: none;
         }
         @media (max-width: 480px) {
             #buttons {
@@ -68,7 +67,7 @@
                 return r.json();
             })
             .then(data => {
-                console.log('Calendars data loaded:', data); // Log for debugging
+                console.log('Calendars data loaded:', data);
                 const select = document.getElementById('calendar-select');
                 data.forEach(cal => {
                     const opt = document.createElement('option');
@@ -83,7 +82,7 @@
                 select.addEventListener('change', updateButtons);
             })
             .catch(err => {
-                console.error('Fetch error:', err); // Log full error
+                console.error('Fetch error:', err);
                 document.getElementById('buttons').innerHTML = '<p>Error loading calendars. Check console for details.</p>';
             });
 
@@ -91,11 +90,45 @@
             const select = document.getElementById('calendar-select');
             if (!select.value) return;
             const val = JSON.parse(select.value);
-            const baseUrl = `${location.protocol === 'https:' ? 'https:' : 'http:'}//${location.host}`;
+            const baseUrl = 'https://paulpallesen.github.io/calendar-ics-generator';
             const icsUrl = baseUrl + val.ics;
             const encodedIcs = encodeURIComponent(icsUrl);
             const encodedName = encodeURIComponent(val.name);
             const buttonsDiv = document.getElementById('buttons');
             buttonsDiv.innerHTML = `
                 <button onclick="window.location.href='webcal://${location.host}${val.ics}'" style="background:#333333;color:white;border-color:#333333;">Apple (iCal)</button>
-                <button onclick="window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=${encodedIcs}', '_blank')" style="background
+                <button onclick="window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=${encodedIcs}', '_blank')" style="background:#1A73E8;color:white;border-color:#1A73E8;">Google Calendar</button>
+                <button onclick="window.open('https://outlook.live.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (personal)</button>
+                <button onclick="window.open('https://outlook.office.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (work/school)</button>
+                <button onclick="copyLink('${icsUrl}')" style="background:#666666;color:white;border-color:#666666;">Copy Subscription Link</button>
+            `;
+            const canvas = document.getElementById('qr-canvas');
+            const qrSection = document.getElementById('qr-section');
+            if (typeof QRCode !== 'undefined') {
+                QRCode.toCanvas(canvas, icsUrl, { width: 200, margin: 1 }, (error) => {
+                    if (error) {
+                        console.error('QR Code generation failed:', error);
+                        qrSection.innerHTML = '<p>Unable to generate QR code. Use the subscription link instead.</p>';
+                    } else {
+                        canvas.style.display = 'block';
+                    }
+                });
+            } else {
+                console.warn('QRCode library not loaded; QR code will not display.');
+                qrSection.innerHTML = '<p>Unable to generate QR code. Use the subscription link instead.</p>';
+            }
+        }
+
+        function copyLink(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = event.target;
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = original; }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy link:', err);
+            });
+        }
+    </script>
+</body>
+</html>
