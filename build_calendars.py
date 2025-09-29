@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 from ics import Calendar, Event
 from pathlib import Path
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,6 @@ def make_uid(title, start, end, location):
     key = f"{title}|{start_str}|{end_str}|{location}"
     return hashlib.md5(key.encode()).hexdigest() + "@torrens-uni.edu.au"
 
-# Get CSV URL from environment or default
 csv_url = os.getenv('CSV_URL')
 if not csv_url:
     logger.error("CSV_URL environment variable not set.")
@@ -98,13 +96,11 @@ for name, group in grouped:
         continue
     
     cal = Calendar()
-    cal.extra.append(('X-WR-CALNAME', str(name)))  # Reverted to tuple for ics==0.7.2
-    cal.extra.append(('X-WR-TIMEZONE', 'Australia/Sydney'))  # Reverted to tuple for ics==0.7.2
+    cal.extra.append("X-WR-CALNAME:" + str(name))  # String for ics==0.7.2
+    cal.extra.append("X-WR-TIMEZONE:Australia/Sydney")  # String for ics==0.7.2
     
     count = 0
     skipped_in_group = 0
-    events = []  # Temporary list to hold events
-    
     for idx, row in group.iterrows():
         try:
             event = Event()
@@ -162,16 +158,12 @@ for name, group in grouped:
             if trans and trans.lower() in ['true', 'yes', '1']:
                 event.transparency = 'TRANSPARENT'
 
-            events.append(event)  # Add to temporary list
+            cal.events.add(event)
             count += 1
         except Exception as e:
             logger.error(f"Failed to process event in calendar '{name}', row index {idx}: {e}")
             skipped_in_group += 1
             continue
-
-    # Add all events to calendar after processing
-    for event in events:
-        cal.events.add(event)
 
     if count > 0:
         try:
