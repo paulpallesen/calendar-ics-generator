@@ -28,7 +28,7 @@ jobs:
           pip install -r requirements.txt
       - name: Run build
         env:
-          CSV_URL: ${{ secrets.CSV_URL || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwoBRBFI-z4haeZv0WMruMzGmebRVPIa-pYOzbMVBX9Si9iQa8VMBzkoYjWt8VRck6OB9853xSSPzM/pub?gid=0&output=csv' }}
+          CSV_URL: ${{ secrets.CSV_URL || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwoBRBFI-z4haeZv0WMruMzGmebRVPIa-pYOzbMVBX9Si9iQa8VMBzkoYjWt8VRck6OB9853xSSPzM/pub?gid=0&single=true&output=csv' }}
         run: python build_calendars.py
       - name: Check if ICS files exist
         run: ls -l public/calendars/
