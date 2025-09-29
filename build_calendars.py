@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from ics import Calendar, Event
 from pathlib import Path
 
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def make_uid(title, start, end, location):
     key = f"{title}|{start_str}|{end_str}|{location}"
     return hashlib.md5(key.encode()).hexdigest() + "@torrens-uni.edu.au"
 
+# Get CSV URL from environment or default
 csv_url = os.getenv('CSV_URL')
 if not csv_url:
     logger.error("CSV_URL environment variable not set.")
@@ -79,11 +81,13 @@ valid_count = len(df)
 skipped_count = initial_count - valid_count
 logger.info(f"Filtered to {valid_count} valid events (skipped {skipped_count} rows with missing Title or Start Date).")
 
+# Create output directory if it doesn't exist
 Path('public/calendars').mkdir(parents=True, exist_ok=True)
 
 calendars_list = []
 grouped = df.groupby('Calendar')
 total_processed = 0
+
 for name, group in grouped:
     if pd.isna(name):
         logger.warning("Skipping group with NaN calendar name.")
@@ -92,9 +96,11 @@ for name, group in grouped:
     if not slug:
         logger.warning(f"Skipping calendar '{name}' due to invalid slug.")
         continue
+    
     cal = Calendar()
-    cal.extra.append(('X-WR-CALNAME', str(name)))  # Set calendar name for Google/others
+    cal.extra.append(('X-WR-CALNAME', str(name)))  # Calendar name for Google
     cal.extra.append(('X-WR-TIMEZONE', 'Australia/Sydney'))  # Explicit timezone for Outlook
+    
     count = 0
     skipped_in_group = 0
     for idx, row in group.iterrows():
@@ -105,10 +111,9 @@ for name, group in grouped:
                 skipped_in_group += 1
                 continue
 
-            # Determine if timed or all-day
+            # Determine if timed or all-day event
             is_timed = row['has_time_start'] or row['has_time_end']
             if is_timed:
-                # Timed event
                 start_time_str = row['Start Time'] if row['has_time_start'] else '00:00:00'
                 event.begin = parse_dt_str(row['Start Date'], start_time_str, tz)
                 if pd.isna(event.begin):
@@ -120,14 +125,13 @@ for name, group in grouped:
                 else:
                     event.end = event.begin + timedelta(hours=1)
             else:
-                # All-day event
                 event.begin = row['Start Date'].date()
                 if pd.notna(row['End Date']):
                     event.end = row['End Date'].date() + timedelta(days=1)
                 else:
                     event.end = event.begin + timedelta(days=1)
 
-            # Adjust if end <= begin
+            # Adjust if end is not after begin
             if event.end <= event.begin:
                 adjustment = timedelta(hours=1) if is_timed else timedelta(days=1)
                 logger.warning(f"Adjusted end for event '{event.name}' (row {idx}) as it was not after begin: from {event.end} to {event.begin + adjustment}")
@@ -144,14 +148,14 @@ for name, group in grouped:
             if url:
                 event.url = url
 
-            # UID (Outlook-friendly email format)
+            # UID for Outlook compatibility
             uid = clean_str(row.get('UID'))
             if not uid:
                 event.uid = make_uid(row['Title'], event.begin, event.end, location)
             else:
                 event.uid = uid
 
-            # Transparent
+            # Transparency
             trans = clean_str(row.get('Transparent'))
             if trans and trans.lower() in ['true', 'yes', '1']:
                 event.transparency = 'TRANSPARENT'
@@ -166,7 +170,7 @@ for name, group in grouped:
     if count > 0:
         try:
             ics_path = f"public/calendars/{slug}.ics"
-            with open(ics_path, 'w') as f:
+            with open(ics_path, 'w', encoding='utf-8') as f:
                 f.write(cal.serialize())
             calendars_list.append({
                 "name": str(name),
@@ -185,7 +189,7 @@ logger.info(f"Total processed: {total_processed} out of {valid_count} valid rows
 
 if calendars_list:
     try:
-        with open('public/calendars.json', 'w') as f:
+        with open('public/calendars.json', 'w', encoding='utf-8') as f:
             json.dump(calendars_list, f)
         logger.info(f"Generated calendars.json with {len(calendars_list)} calendars.")
     except Exception as e:
