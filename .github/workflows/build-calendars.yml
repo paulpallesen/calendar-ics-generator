@@ -5,9 +5,9 @@ permissions:
   pages: write
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:      # manual run option
   schedule:
-    - cron: '0 0 * * *'  # daily at 00:00 UTC
+    - cron: '0 0 * * *'   # daily at 00:00 UTC
 
 jobs:
   build:
@@ -33,9 +33,14 @@ jobs:
       - name: Verify public/ exists
         run: |
           if [ ! -d "public" ]; then
-            echo "❌ ERROR: 'public/' folder not found. Build must create this directory."
+            echo "❌ ERROR: 'public/' folder does not exist"
             exit 1
           fi
+          if [ -z "$(ls -A public)" ]; then
+            echo "❌ ERROR: 'public/' folder is empty"
+            exit 1
+          fi
+          echo "✅ public/ folder has content"
 
       - name: List generated files
         run: |
