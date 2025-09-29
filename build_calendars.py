@@ -1,5 +1,6 @@
 # build_calendars.py
 # Google Sheet (CSV_URL secret) -> public/calendars/<slug>.ics + calendars.json + index.html
+# Safe update: adds flexible header handling + diagnostics; preserves existing behavior.
 
 import os
 import re
@@ -38,7 +39,7 @@ def clean_str(v) -> str:
     return "" if s.lower() == "nan" else s
 
 def parse_dt(v):
-    if pd.isna(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
     dt = pd.to_datetime(v, errors="coerce", dayfirst=DAYFIRST, utc=False)
     if pd.isna(dt):
@@ -52,6 +53,32 @@ def make_uid(title, start, end, extra=""):
     s = f"{title}|{start}|{end}|{extra}"
     return md5(s.encode("utf-8")).hexdigest() + "@dynamic-cal"
 
+def first_col(df, names):
+    """Return the first matching column name from a list of candidates, else None."""
+    cols = {c.strip().lower(): c for c in df.columns}
+    for n in names:
+        key = n.strip().lower()
+        if key in cols:
+            return cols[key]
+    return None
+
+def combine_date_time(date_val, time_val):
+    """Combine separate date and time cells into a single Timestamp (or just date if no time)."""
+    d = parse_dt(date_val)
+    if d is None:
+        return None
+    if time_val is None or (isinstance(time_val, float) and pd.isna(time_val)) or str(time_val).strip() == "":
+        # date-only
+        return d.normalize()  # midnight
+    # Parse time; pandas can parse a time string; combine with date
+    t = pd.to_datetime(str(time_val), errors="coerce", dayfirst=DAYFIRST)
+    if pd.isna(t):
+        return d.normalize()
+    return pd.Timestamp(
+        year=d.year, month=d.month, day=d.day,
+        hour=t.hour, minute=t.minute, second=t.second
+    )
+
 # ------------------ Load CSV ----------------
 print(f"📥 Downloading CSV from {CSV_URL}")
 resp = requests.get(CSV_URL, timeout=30)
@@ -63,87 +90,110 @@ except requests.HTTPError as e:
         "➡️ Ensure your Google Sheet is 'Published to the web' and the URL ends with '&output=csv'."
     )
 
-# Use io.StringIO (not pandas.compat)
 df = pd.read_csv(StringIO(resp.text))
 
-# Normalize headers (tolerate common variants)
-header_map = {
-    "Calendar": "Calendar",
-    "Title": "Title",
-    "Start": "Start",
-    "Start Date": "Start",
-    "End": "End",
-    "End Date": "End",
-    "Location": "Location",
-    "Description": "Description",
-    "URL": "URL",
-    "Uid": "UID",
-    "UID": "UID",
-}
-df = df.rename(columns={c: header_map.get(c.strip(), c.strip()) for c in df.columns})
+print(f"ℹ️ Loaded {len(df)} rows from sheet.")
+print("ℹ️ Columns from sheet:", list(df.columns))
 
-required = ["Calendar", "Title", "Start"]
-missing = [c for c in required if c not in df.columns]
-if missing:
-    raise ValueError(f"❌ Missing required column(s): {', '.join(missing)}")
+# Flexible header resolution
+col_calendar = first_col(df, ["Calendar", "Calendar Name", "Feed"])
+col_title    = first_col(df, ["Title", "Event", "Name"])
+col_start    = first_col(df, ["Start"])
+col_start_d  = first_col(df, ["Start Date"])
+col_start_t  = first_col(df, ["Start Time"])
+col_end      = first_col(df, ["End"])
+col_end_d    = first_col(df, ["End Date"])
+col_end_t    = first_col(df, ["End Time"])
+col_loc      = first_col(df, ["Location", "Place", "Room"])
+col_desc     = first_col(df, ["Description", "Details", "Notes"])
+col_url      = first_col(df, ["URL", "Link"])
+col_uid      = first_col(df, ["UID", "Uid"])
+col_allday   = first_col(df, ["All Day", "All-day", "AllDay"])
 
-# Clean string columns
-for col in ["Calendar", "Title", "Location", "Description", "URL", "UID"]:
-    if col in df.columns:
-        df[col] = df[col].apply(clean_str)
+missing_keys = []
+if not col_calendar: missing_keys.append("Calendar")
+if not col_title:    missing_keys.append("Title/Event/Name")
+if not (col_start or col_start_d):
+    missing_keys.append("Start OR (Start Date + optional Start Time)")
+if missing_keys:
+    raise SystemExit("❌ Required columns missing: " + ", ".join(missing_keys))
 
-# Coerce datetimes with dayfirst
-for col in ["Start", "End"]:
-    if col in df.columns:
-        df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=DAYFIRST, utc=False)
+# Clean common string columns
+for c in [col_calendar, col_title, col_loc, col_desc, col_url, col_uid]:
+    if c:
+        df[c] = df[c].apply(clean_str)
 
-# Drop empty essential rows
-df = df.dropna(subset=["Calendar", "Title", "Start"])
-
-# ------------------ Prepare output ----------
+# Prepare output
 os.makedirs(ICS_DIR, exist_ok=True)
-
 manifest = []
 counts = {}
 
-# preserve calendar order as first seen
-cal_order = list(dict.fromkeys(df["Calendar"].tolist()))
+# Preserve first-seen calendar order
+cal_order = list(dict.fromkeys(df[col_calendar].tolist()))
 
-# ------------------ Build ICS per calendar ---
+total_events = 0
+per_calendar_debug = []
+
 for cal_name in cal_order:
     if not cal_name:
         continue
-    g = df[df["Calendar"] == cal_name]
-    if g.empty:
+    subset = df[df[col_calendar] == cal_name]
+    if subset.empty:
         continue
 
     cal = Calendar()
-    total = 0
+    created = 0
 
-    for _, r in g.iterrows():
-        title = clean_str(r.get("Title"))
+    for _, r in subset.iterrows():
+        title = clean_str(r.get(col_title))
         if not title:
             continue
 
-        start_dt = parse_dt(r.get("Start"))
-        end_dt = parse_dt(r.get("End")) if "End" in r else None
+        # Build start/end timestamps from either combined or split columns
+        start_dt = None
+        end_dt = None
+
+        if col_start:
+            start_dt = parse_dt(r.get(col_start))
+        elif col_start_d:
+            start_dt = combine_date_time(r.get(col_start_d), r.get(col_start_t))
+
+        if col_end:
+            end_dt = parse_dt(r.get(col_end))
+        elif col_end_d:
+            end_dt = combine_date_time(r.get(col_end_d), r.get(col_end_t))
+
         if start_dt is None and end_dt is None:
+            # nothing to place on a calendar
             continue
+
+        # Determine all-day
+        allday_flag = False
+        if col_allday:
+            v = str(r.get(col_allday)).strip().lower()
+            allday_flag = v in ("true", "1", "yes", "y")
+
+        # If both times are blank or midnight and not explicitly timed, treat as all-day
+        if not allday_flag:
+            if (start_dt is not None and is_midnight(start_dt)) and (end_dt is None or is_midnight(end_dt)):
+                allday_flag = True
 
         ev = Event()
         ev.name = title
 
-        # All-day handling (dates only or midnight)
-        if start_dt is not None and is_midnight(start_dt) and (end_dt is None or is_midnight(end_dt)):
+        if allday_flag:
+            # All-day: use date parts and ensure DTEND > DTSTART (non-inclusive)
+            if start_dt is None and end_dt is not None:
+                # If only End exists, default to single-day ending date
+                start_dt = end_dt
             ev.begin = start_dt.date()
             ev.make_all_day()
-            # ICS DTEND is non-inclusive → single-day all-day uses next day
             if end_dt is None or end_dt.date() <= start_dt.date():
                 ev.end = (start_dt + pd.Timedelta(days=1)).date()
             else:
                 ev.end = end_dt.date()
         else:
-            # Timed events
+            # Timed: ensure End > Start
             if start_dt is None and end_dt is not None:
                 start_dt = end_dt - pd.Timedelta(hours=DEFAULT_TIMED_DURATION_HOURS)
             if end_dt is None or end_dt <= start_dt:
@@ -151,29 +201,52 @@ for cal_name in cal_order:
             ev.begin = start_dt
             ev.end = end_dt
 
-        loc = clean_str(r.get("Location"))
-        desc = clean_str(r.get("Description"))
-        url = clean_str(r.get("URL"))
-        uid = clean_str(r.get("UID")) or make_uid(title, start_dt, end_dt, loc)
+        # Optional fields
+        if col_loc:  ev.location    = clean_str(r.get(col_loc)) or None
+        if col_desc: ev.description = clean_str(r.get(col_desc)) or None
+        if col_url:  ev.url         = clean_str(r.get(col_url)) or None
 
-        if loc: ev.location = loc
-        if desc: ev.description = desc
-        if url: ev.url = url
-        ev.uid = uid
+        uid = clean_str(r.get(col_uid)) if col_uid else ""
+        ev.uid = uid or make_uid(title, start_dt, end_dt, ev.location or "")
 
         cal.events.add(ev)
-        total += 1
+        created += 1
+        total_events += 1
 
+    # Write ICS if any events for this calendar
     slug = slugify(cal_name)
-    rel_ics = f"/calendars/{slug}.ics"
+    rel_ics = f"/calendars/{slug}.ics}"
+    # fix accidental brace in path if present
+    if rel_ics.endswith("}"):
+        rel_ics = rel_ics[:-1]
     ics_path = os.path.join(OUT_DIR, rel_ics.lstrip("/"))
+
+    # Keep a small debug record
+    per_calendar_debug.append((cal_name, created))
 
     with open(ics_path, "w", encoding="utf-8") as f:
         f.writelines(cal.serialize_iter())
 
     manifest.append({"name": cal_name, "slug": slug, "ics": rel_ics})
-    counts[cal_name] = total
-    print(f"✅ Wrote {ics_path} ({total} events)")
+    counts[cal_name] = created
+    print(f"✅ Wrote {ics_path} ({created} events)")
+
+# Diagnostics summary
+print("—— Summary ——")
+print(f"Calendars found: {len(per_calendar_debug)}")
+for name, cnt in per_calendar_debug:
+    print(f"  • {name}: {cnt} events")
+print(f"Total events across all calendars: {total_events}")
+
+# If zero events, fail with helpful info
+if total_events == 0:
+    print("❌ No events were generated. Please verify:")
+    print("   - Column names present in your sheet:")
+    print("     ", list(df.columns))
+    print("   - At least one of these start combinations exists per row:")
+    print("     • 'Start'  OR  'Start Date' (+ optional 'Start Time')")
+    print("   - 'Calendar' and 'Title' columns are filled")
+    raise SystemExit(1)
 
 # ------------------ Write manifest ----------
 with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
