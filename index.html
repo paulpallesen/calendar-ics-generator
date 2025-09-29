@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subscribe to Calendars</title>
+<style>
+:root{
+  --apple:#333; --google:#1A73E8; --outlook:#0078D4;
+  --bg:#0b0f1a; --card:#121826; --text:#e6eaf2; --muted:#9aa4b2; --accent:#2dd4bf;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;background:var(--bg);color:var(--text)}
+.container{max-width:900px;margin:40px auto;padding:24px}
+.card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:24px}
+h1{margin:0 0 8px;font-size:28px}
+p.lead{margin:0 0 20px;color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+select,button{font-size:16px;border-radius:10px;border:1px solid #223;padding:10px 12px;background:#0f1524;color:var(--text)}
+select{min-width:260px}
+button{cursor:pointer;transition:.15s transform ease,.2s opacity}
+button:hover{transform:translateY(-1px)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:none}
+.apple{background:var(--apple);color:#fff}
+.google{background:var(--google);color:#fff}
+.outlook{background:var(--outlook);color:#fff}
+.copy{background:var(--accent);color:#042;font-weight:600}
+.badge{display:inline-block;background:#172036;color:var(--muted);padding:6px 10px;border-radius:999px;font-size:12px;margin-left:8px}
+.footer{margin-top:16px;color:var(--muted);font-size:13px}
+.hidden{display:none}
+code{background:#0f1524;padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Subscribe to Calendars <span id="count" class="badge"></span></h1>
+      <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+
+      <div class="row">
+        <label for="calSel" class="hidden">Calendar</label>
+        <select id="calSel" aria-label="Choose calendar"></select>
+        <button id="copyBtn" class="btn copy">Copy link</button>
+      </div>
+
+      <div class="row">
+        <button id="appleBtn"  class="btn apple">Apple Calendar</button>
+        <button id="googleBtn" class="btn google">Google Calendar</button>
+        <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+        <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+      </div>
+
+      <div class="footer">
+        Selected feed: <code id="linkOut"></code>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const sel = document.getElementById('calSel');
+  const copyBtn = document.getElementById('copyBtn');
+  const appleBtn = document.getElementById('appleBtn');
+  const googleBtn = document.getElementById('googleBtn');
+  const olLiveBtn = document.getElementById('olLiveBtn');
+  const olWorkBtn = document.getElementById('olWorkBtn');
+  const linkOut = document.getElementById('linkOut');
+  const countEl = document.getElementById('count');
+
+  async function loadManifest(){
+    const url = new URL('calendars.json', location.href).href;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('Failed to load calendars.json');
+    return res.json();
+  }
+
+  function absUrl(rel){ return new URL(rel, location.href).href; }
+  function currentIcsUrl(){
+    const slug = sel.value;
+    return absUrl('calendars/' + slug + '.ics');
+  }
+  function setButtons(){
+    const ics = currentIcsUrl();
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+    const enc = encodeURIComponent(ics);
+    // Apple (webcal)
+    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
+    // Google
+    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r?cid=' + enc, '_blank');
+    // Outlook (personal)
+    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook (work/school)
+    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    linkOut.textContent = ics;
+  }
+
+  try{
+    const calendars = await loadManifest();
+    countEl.textContent = calendars.length + ' available';
+    sel.innerHTML = '';
+    calendars.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', setButtons);
+    setButtons();
+  }catch(e){
+    linkOut.textContent = 'Failed to load calendars.json';
+  }
+
+  copyBtn.onclick = async () => {
+    try{
+      await navigator.clipboard.writeText(currentIcsUrl());
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy link', 1200);
+    }catch(e){
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
+    }
+  };
+})();
+</script>
+</body>
+</html>
