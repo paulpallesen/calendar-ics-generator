@@ -214,7 +214,7 @@ for cal_name in cal_order:
         total_events += 1
 
     # Write ICS if any events for this calendar
-    slug = slugify(cal_name)
+        slug = slugify(cal_name)
     rel_ics = f"/calendars/{slug}.ics}"
     # fix accidental brace in path if present
     if rel_ics.endswith("}"):
