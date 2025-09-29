@@ -109,6 +109,8 @@ col_desc     = first_col(df, ["Description", "Details", "Notes"])
 col_url      = first_col(df, ["URL", "Link"])
 col_uid      = first_col(df, ["UID", "Uid"])
 col_allday   = first_col(df, ["All Day", "All-day", "AllDay"])
+# ✅ NEW: resolve transparency column (TRUE => FREE)
+col_transp   = first_col(df, ["Transparent", "FreeBusy", "Show As", "ShowAs", "Transparency"])
 
 missing_keys = []
 if not col_calendar: missing_keys.append("Calendar")
@@ -142,6 +144,7 @@ for cal_name in cal_order:
         continue
 
     cal = Calendar()
+    cal.extra.append(["X-WR-CALNAME", cal_name])  # Apple default display name inside the ICS
     created = 0
 
     for _, r in subset.iterrows():
@@ -205,6 +208,15 @@ for cal_name in cal_order:
         if col_loc:  ev.location    = clean_str(r.get(col_loc)) or None
         if col_desc: ev.description = clean_str(r.get(col_desc)) or None
         if col_url:  ev.url         = clean_str(r.get(col_url)) or None
+
+        # ✅ NEW: map transparency so TRUE => FREE (does not block)
+        if col_transp:
+            raw = str(r.get(col_transp)).strip().lower()
+            if raw in ("true", "1", "yes", "y", "free", "transparent"):
+                ev.transparent = True     # FREE
+            elif raw in ("false", "0", "no", "n", "busy", "opaque"):
+                ev.transparent = False    # BUSY
+            # else: leave unset (client default)
 
         uid = clean_str(r.get(col_uid)) if col_uid else ""
         ev.uid = uid or make_uid(title, start_dt, end_dt, ev.location or "")
@@ -338,13 +350,13 @@ code{background:#0f1524;padding:2px 6px;border-radius:6px}
     const ics = currentIcsUrl();
     const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
     const enc = encodeURIComponent(ics);
-    // Apple (webcal)
+    # Apple (webcal)
     appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
-    // Google
+    # Google
     googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r?cid=' + enc, '_blank');
-    // Outlook (personal)
+    # Outlook (personal)
     olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
-    // Outlook (work/school)
+    # Outlook (work/school)
     olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
     linkOut.textContent = ics;
   }
