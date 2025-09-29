@@ -58,6 +58,7 @@
             margin: 16px 0
         }
 
+        /* Inputs + buttons */
         select,
         button {
             font-size: 16px;
@@ -66,10 +67,6 @@
             padding: 10px 12px;
             background: #0f1524;
             color: var(--text)
-        }
-
-        select {
-            min-width: 260px
         }
 
         button {
@@ -89,11 +86,37 @@
             border: none
         }
 
-        .apple {
-            background: var(--apple);
-            color: #fff
+        /* ✅ Your requested style changes */
+        select {
+            background: var(--bg);
+            /* dropdown matches page background */
+            color: #cfd6e6;
+            /* lighter grey for better visibility */
+            border: 1px solid #2a3247;
+            min-width: 260px;
         }
 
+        select:focus {
+            outline: 2px solid #2dd4bf;
+            outline-offset: 1px
+        }
+
+        /* Copy link: white bg, black text */
+        .copy {
+            background: #fff;
+            color: #000;
+            border: 1px solid #d4d7de;
+            font-weight: 600;
+        }
+
+        /* Apple: white bg, black text */
+        .apple {
+            background: #fff;
+            color: #000;
+            border: 1px solid #d4d7de;
+        }
+
+        /* Google + Outlook keep brand colors */
         .google {
             background: var(--google);
             color: #fff
@@ -104,26 +127,21 @@
             color: #fff
         }
 
-        .copy {
-            background: var(--accent);
-            color: #042;
-            font-weight: 600
-        }
-
+        /* Count badge: white bg, black text */
         .badge {
             display: inline-block;
-            background: #172036;
-            color: var(--muted);
+            background: #fff;
+            color: #000;
             padding: 6px 10px;
             border-radius: 999px;
             font-size: 12px;
-            margin-left: 8px
+            margin-left: 8px;
+            border: 1px solid #d4d7de;
         }
 
+        /* Hide the footer line without touching JS */
         .footer {
-            margin-top: 16px;
-            color: var(--muted);
-            font-size: 13px
+            display: none
         }
 
         .hidden {
@@ -157,6 +175,7 @@
                 <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
             </div>
 
+            <!-- Footer is intentionally hidden via CSS to preserve JS -->
             <div class="footer">
                 Selected feed: <code id="linkOut"></code>
             </div>
@@ -181,35 +200,27 @@
                 return absUrl('calendars/' + slug + '.ics');
             }
 
-            function toAppleNameFragment(name) {
-                // Apple reads the URL fragment after '#' as the default calendar name
-                // e.g. webcal://.../calendar.ics#My%20Calendar
-                return encodeURIComponent(name);
-            }
-
             function setButtons() {
-                const ics = currentIcsUrl();
+                const ics = currentIcsUrl();                                     // https://.../calendars/<slug>.ics
+                const icsWebcal = 'webcal://' + ics.replace(/^https?:\/\//, '');  // webcal://.../calendars/<slug>.ics
+
                 const name = sel.options[sel.selectedIndex].text;
-                const encIcs = encodeURIComponent(ics);
                 const encName = encodeURIComponent(name);
+                const enc = encodeURIComponent(ics);
 
-                // Apple (prefill name via fragment)
-                const appleHref = 'webcal://' + ics.replace(/^https?:\/\//, '') + '#' + toAppleNameFragment(name);
-                appleBtn.onclick = () => location.href = appleHref;
+                // Apple (best-effort name comes from X-WR-CALNAME in the ICS)
+                appleBtn.onclick = () => location.href = icsWebcal;
 
-                // Google (prefill Add-by-URL)
-                const googleHref = 'https://calendar.google.com/calendar/r?cid=' + encIcs;
-                googleBtn.onclick = () => window.open(googleHref, '_blank');
+                // Google: open "Add by URL" with the URL prefilled
+                googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
 
-                // Outlook (personal) prefilled
-                const liveHref = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encIcs + '&name=' + encName;
-                olLiveBtn.onclick = () => window.open(liveHref, '_blank');
+                // Outlook (personal)
+                olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + encName, '_blank');
 
-                // Outlook (work/school) prefilled
-                const workHref = 'https://outlook.office.com/calendar/0/addfromweb?url=' + encIcs + '&name=' + encName;
-                olWorkBtn.onclick = () => window.open(workHref, '_blank');
+                // Outlook (work/school)
+                olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + encName, '_blank');
 
-                linkOut.textContent = ics;
+                if (linkOut) linkOut.textContent = ics; // harmless now that footer is hidden
             }
 
             async function loadManifest() {
@@ -232,7 +243,7 @@
                 sel.addEventListener('change', setButtons);
                 setButtons();
             } catch (e) {
-                linkOut.textContent = 'Failed to load calendars.json';
+                if (linkOut) linkOut.textContent = 'Failed to load calendars.json';
             }
 
             copyBtn.onclick = async () => {
