@@ -252,6 +252,7 @@ index_html = r"""<!doctype html>
 <title>Subscribe to Calendars</title>
 <style>
 :root{
+  /* Colors (palette you chose) */
   --bg:#0a0f16;
   --card:#101826;
   --text:#dde7f6;
@@ -301,24 +302,114 @@ select{
   appearance:none;
   -webkit-appearance:none;
   -moz-appearance:none;
-  padding-right:48px;
+  padding-right:48px; /* room for chevron */
+  /* chevron moved slightly left (visibly indented) */
   background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 6 5-6' fill='none' stroke='%23cdd8e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat:no-repeat;
-  background-position:right 1.75rem center;
+  background-position:right 1.75rem center; /* nudge */
   background-size:12px 8px;
 }
 select option{color:var(--text)}
 select:placeholder-shown{color:#c7d3e5}
 
-.footer{margin-top:16px;color:var(--muted);font-size:13px}
-code{background:#0f1524;padding:2px 6px;border-radius:6px}
+/* Keep spacing/structure identical to your previous layout */
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 </style>
 </head>
 <body>
-  <!-- rest of HTML remains unchanged -->
+  <div class="container">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <h1 style="margin:0">Subscribe to Calendars</h1>
+        <span id="count" class="badge"></span>
+      </div>
+      <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+
+      <!-- Row 1: select + copy link (same spacing/placement) -->
+      <div class="row controls">
+        <label for="calSel" class="visually-hidden" style="position:absolute;left:-9999px;">Calendar</label>
+        <select id="calSel" aria-label="Choose calendar"></select>
+        <button id="copyBtn" class="btn copy">Copy link</button>
+      </div>
+
+      <!-- Row 2: brand buttons (same order/spacing as before) -->
+      <div class="row">
+        <button id="appleBtn"  class="btn apple">Apple Calendar</button>
+        <button id="googleBtn" class="btn google">Google Calendar</button>
+        <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+        <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const sel = document.getElementById('calSel');
+  const copyBtn = document.getElementById('copyBtn');
+  const appleBtn = document.getElementById('appleBtn');
+  const googleBtn = document.getElementById('googleBtn');
+  const olLiveBtn = document.getElementById('olLiveBtn');
+  const olWorkBtn = document.getElementById('olWorkBtn');
+  const countEl = document.getElementById('count');
+
+  async function loadManifest(){
+    const url = new URL('calendars.json', location.href).href;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('Failed to load calendars.json');
+    return res.json();
+  }
+
+  function absUrl(rel){ return new URL(rel, location.href).href; }
+  function currentIcsUrl(){
+    const slug = sel.value;
+    return absUrl('calendars/' + slug + '.ics');
+  }
+  function setButtons(){
+    const ics = currentIcsUrl();
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+    const enc = encodeURIComponent(ics);
+    // Apple (webcal)
+    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
+    // Google: jump straight to "Add by URL"
+    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
+    // Outlook (personal)
+    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook (work/school)
+    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+  }
+
+  try{
+    const calendars = await loadManifest();
+    countEl.textContent = calendars.length + ' available';
+    sel.innerHTML = '';
+    calendars.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', setButtons);
+    setButtons();
+  }catch(e){
+    // Keep page visible; if manifest fails, leave empty select
+    console.error(e);
+  }
+
+  copyBtn.onclick = async () => {
+    try{
+      await navigator.clipboard.writeText(currentIcsUrl());
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy link', 1200);
+    }catch(e){
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
+    }
+  };
+})();
+</script>
 </body>
 </html>
 """
+
 
 with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
     f.write(index_html)
