@@ -154,8 +154,11 @@ for cal_name in cal_order:
     if subset.empty:
         continue
 
-    cal = Calendar()
-    cal.extra.append(("X-WR-CALNAME", cal_name))
+    from ics.grammar.parse import ContentLine
+
+cal = Calendar()
+cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
+
     created = 0
 
     for _, r in subset.iterrows():
