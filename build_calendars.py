@@ -156,8 +156,8 @@ for cal_name in cal_order:
 
     from ics.grammar.parse import ContentLine
 
-cal = Calendar()
-cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
+    cal = Calendar()
+    cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
 
     created = 0
 
