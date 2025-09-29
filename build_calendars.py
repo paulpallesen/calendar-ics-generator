@@ -1,197 +1,306 @@
+# build_calendars.py
+# Google Sheet (CSV_URL secret) -> public/calendars/<slug>.ics + calendars.json + index.html
+
 import os
 import re
 import json
-import hashlib
-import logging
+from hashlib import md5
+
 import pandas as pd
-from datetime import timedelta
-from zoneinfo import ZoneInfo
 from ics import Calendar, Event
-from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+CSV_URL = os.getenv("CSV_URL")
+if not CSV_URL:
+    raise ValueError("❌ CSV_URL environment variable is not set (add a repo secret named CSV_URL).")
 
-def slugify(s):
-    if pd.isna(s):
-        return ''
-    s = str(s).lower().strip()
-    s = re.sub(r'[^a-z0-9\s-]', '', s)
-    s = re.sub(r'[\s-]+', '-', s)
-    s = re.sub(r'^-+|-+$', '', s)
-    return s
+# ---- Helpers --------------------------------------------------------------
 
-def clean_str(s):
-    if pd.isna(s):
+_slug_re = re.compile(r"[^a-z0-9]+")
+
+def slugify(name: str) -> str:
+    s = (name or "").strip().lower()
+    s = _slug_re.sub("-", s).strip("-")
+    return s or "calendar"
+
+def clean_str(v) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    s = str(v).strip()
+    return "" if s.lower() == "nan" else s
+
+def parse_dt(v):
+    if pd.isna(v):
         return None
-    return str(s).strip()
-
-def parse_dt_str(date_str, time_str, tz):
-    if pd.isna(date_str) or pd.isna(time_str):
+    dt = pd.to_datetime(v, errors="coerce")
+    if pd.isna(dt):
         return None
-    try:
-        dt_str = f"{date_str.date()} {time_str}"
-        dt = pd.to_datetime(dt_str, errors='coerce')
-        if pd.isna(dt):
-            return None
-        if dt.tz is None:
-            return dt.tz_localize(tz)
-        else:
-            return dt.tz_convert(tz)
-    except Exception as e:
-        logger.warning(f"Failed to parse datetime {date_str} {time_str}: {e}")
-        return None
+    return dt
 
-def make_uid(title, start, end, location):
-    start_str = start.isoformat() if hasattr(start, 'isoformat') else str(start)
-    end_str = end.isoformat() if hasattr(end, 'isoformat') else str(end)
-    key = f"{title}|{start_str}|{end_str}|{location}"
-    return hashlib.md5(key.encode()).hexdigest() + "@torrens-uni.edu.au"
+def make_uid(title, start, end, extra=""):
+    s = f"{title}|{start}|{end}|{extra}"
+    return md5(s.encode("utf-8")).hexdigest() + "@dynamic-cal"
 
-csv_url = os.getenv('CSV_URL')
-if not csv_url:
-    logger.error("CSV_URL environment variable not set.")
-    exit(1)
+# ---- Read Google Sheet ----------------------------------------------------
 
-tz = ZoneInfo("Australia/Sydney")
-
-logger.info("Loading CSV...")
 try:
-    df = pd.read_csv(csv_url, na_values=['', 'nan'])
-    logger.info(f"CSV loaded with {len(df)} raw rows.")
+    df = pd.read_csv(CSV_URL)
 except Exception as e:
-    logger.error(f"Failed to load CSV: {e}")
-    exit(1)
+    raise RuntimeError(f"❌ Failed to read CSV from {CSV_URL}: {e}")
 
-# Clean and prepare columns
-df = df.dropna(subset=['Calendar', 'Title'])
-df['Start Date'] = pd.to_datetime(df['Start Date'], errors='coerce', dayfirst=True)
-df['End Date'] = pd.to_datetime(df['End Date'], errors='coerce', dayfirst=True)
-df['Start Time'] = df['Start Time'].astype(str).str.strip()
-df['End Time'] = df['End Time'].astype(str).str.strip()
-df['has_time_start'] = (df['Start Time'] != '') & (df['Start Time'] != 'nan') & df['Start Date'].notna()
-df['has_time_end'] = (df['End Time'] != '') & (df['End Time'] != 'nan') & df['End Date'].notna()
+# Expected headers (keep your existing naming); tolerate common variants
+header_map = {
+    "Calendar": "Calendar",
+    "Title": "Title",
+    "Start": "Start",
+    "Start Date": "Start",
+    "End": "End",
+    "End Date": "End",
+    "Location": "Location",
+    "Description": "Description",
+    "URL": "URL",
+    "Uid": "UID",
+    "UID": "UID",
+}
 
-# Filter valid rows
-initial_count = len(df)
-df = df[df['Title'].notna() & df['Start Date'].notna()]
-valid_count = len(df)
-skipped_count = initial_count - valid_count
-logger.info(f"Filtered to {valid_count} valid events (skipped {skipped_count} rows with missing Title or Start Date).")
+# Normalize columns
+norm_cols = {}
+for c in df.columns:
+    key = c.strip()
+    norm = header_map.get(key, key)
+    norm_cols[c] = norm
+df = df.rename(columns=norm_cols)
 
-Path('public/calendars').mkdir(parents=True, exist_ok=True)
+required = ["Calendar", "Title", "Start"]
+missing = [c for c in required if c not in df.columns]
+if missing:
+    raise ValueError(f"❌ Missing required column(s): {', '.join(missing)}")
 
-calendars_list = []
-grouped = df.groupby('Calendar')
-total_processed = 0
+# Clean blanks and coerce datetimes
+for col in ["Calendar", "Title", "Location", "Description", "URL", "UID"]:
+    if col in df.columns:
+        df[col] = df[col].apply(clean_str)
 
-for name, group in grouped:
-    if pd.isna(name):
-        logger.warning("Skipping group with NaN calendar name.")
+for col in ["Start", "End"]:
+    if col in df.columns:
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+
+# Drop empty rows
+df = df.dropna(subset=["Calendar", "Title", "Start"])
+
+# ---- Build output dirs ----------------------------------------------------
+
+os.makedirs("public/calendars", exist_ok=True)
+
+# ---- Build ICS per calendar ----------------------------------------------
+
+manifest = []   # [{name, slug, ics}]
+counts = {}     # calendar name -> event count
+
+# Preserve first-seen calendar order
+cal_names_in_order = list(dict.fromkeys(df["Calendar"].tolist()))
+
+for cal_name in cal_names_in_order:
+    if not cal_name:
         continue
-    slug = slugify(name)
-    if not slug:
-        logger.warning(f"Skipping calendar '{name}' due to invalid slug.")
+    g = df[df["Calendar"] == cal_name]
+    if g.empty:
         continue
-    
+
     cal = Calendar()
-    cal.extra.append("X-WR-CALNAME:" + str(name))  # String for ics==0.7.2
-    cal.extra.append("X-WR-TIMEZONE:Australia/Sydney")  # String for ics==0.7.2
-    
-    count = 0
-    skipped_in_group = 0
-    for idx, row in group.iterrows():
-        try:
-            event = Event()
-            event.name = clean_str(row['Title'])
-            if not event.name:
-                skipped_in_group += 1
-                continue
+    total = 0
 
-            # Determine if timed or all-day event
-            is_timed = row['has_time_start'] or row['has_time_end']
-            if is_timed:
-                start_time_str = row['Start Time'] if row['has_time_start'] else '00:00:00'
-                event.begin = parse_dt_str(row['Start Date'], start_time_str, tz)
-                if pd.isna(event.begin):
-                    skipped_in_group += 1
-                    continue
-                if pd.notna(row['End Date']):
-                    end_time_str = row['End Time'] if row['has_time_end'] else '00:00:00'
-                    event.end = parse_dt_str(row['End Date'], end_time_str, tz)
-                else:
-                    event.end = event.begin + timedelta(hours=1)
-            else:
-                event.begin = row['Start Date'].date()
-                if pd.notna(row['End Date']):
-                    event.end = row['End Date'].date() + timedelta(days=1)
-                else:
-                    event.end = event.begin + timedelta(days=1)
-
-            # Adjust if end is not after begin
-            if event.end <= event.begin:
-                adjustment = timedelta(hours=1) if is_timed else timedelta(days=1)
-                logger.warning(f"Adjusted end for event '{event.name}' (row {idx}) as it was not after begin: from {event.end} to {event.begin + adjustment}")
-                event.end = event.begin + adjustment
-
-            # Optional fields
-            location = clean_str(row.get('Location'))
-            if location:
-                event.location = location
-            desc = clean_str(row.get('Description'))
-            if desc:
-                event.description = desc
-            url = clean_str(row.get('URL'))
-            if url:
-                event.url = url
-
-            # UID for compatibility
-            uid = clean_str(row.get('UID'))
-            if not uid:
-                event.uid = make_uid(row['Title'], event.begin, event.end, location)
-            else:
-                event.uid = uid
-
-            # Transparency
-            trans = clean_str(row.get('Transparent'))
-            if trans and trans.lower() in ['true', 'yes', '1']:
-                event.transparency = 'TRANSPARENT'
-
-            cal.events.add(event)
-            count += 1
-        except Exception as e:
-            logger.error(f"Failed to process event in calendar '{name}', row index {idx}: {e}")
-            skipped_in_group += 1
+    for _, r in g.iterrows():
+        title = clean_str(r.get("Title"))
+        if not title:
             continue
 
-    if count > 0:
-        try:
-            ics_path = f"public/calendars/{slug}.ics"
-            with open(ics_path, 'w', encoding='utf-8') as f:
-                f.write(cal.serialize())
-            calendars_list.append({
-                "name": str(name),
-                "slug": slug,
-                "ics": f"/calendars/{slug}.ics"
-            })
-            logger.info(f"Generated {count} events for '{name}' ({slug}) (skipped {skipped_in_group} in group).")
-            total_processed += count
-        except Exception as e:
-            logger.error(f"Failed to write ICS for '{name}': {e}")
-    else:
-        logger.warning(f"No valid events generated for '{name}'.")
+        start = r.get("Start")
+        end = r.get("End") if "End" in r else None
+        start_dt = parse_dt(start)
+        end_dt = parse_dt(end) if end is not None else None
+        if start_dt is None and end_dt is None:
+            continue
 
-# Validation summary
-logger.info(f"Total processed: {total_processed} out of {valid_count} valid rows from sheet (overall skipped: {valid_count - total_processed}).")
+        ev = Event()
+        ev.name = title
 
-if calendars_list:
-    try:
-        with open('public/calendars.json', 'w', encoding='utf-8') as f:
-            json.dump(calendars_list, f)
-        logger.info(f"Generated calendars.json with {len(calendars_list)} calendars.")
-    except Exception as e:
-        logger.error(f"Failed to write calendars.json: {e}")
-else:
-    logger.warning("No calendars generated.")
+        # All-day detection: if Start has 00:00:00 and End is missing or also 00:00:00
+        # we treat it as all-day; otherwise use datetime.
+        if start_dt is not None:
+            if (start_dt.hour, start_dt.minute, start_dt.second) == (0, 0, 0) and (end_dt is None or (end_dt.hour, end_dt.minute, end_dt.second) == (0, 0, 0)):
+                ev.begin = start_dt.date()
+                ev.make_all_day()
+                # For all-day with explicit End date, ics will handle DTEND; otherwise single-day
+                if end_dt is not None and end_dt.date() != start_dt.date():
+                    ev.end = end_dt.date()
+            else:
+                ev.begin = start_dt
+                if end_dt is not None:
+                    ev.end = end_dt
+        elif end_dt is not None:
+            ev.begin = end_dt
 
-logger.info("Build complete.")
+        loc = clean_str(r.get("Location"))
+        desc = clean_str(r.get("Description"))
+        url = clean_str(r.get("URL"))
+        uid = clean_str(r.get("UID")) or make_uid(title, start_dt, end_dt, loc)
+
+        if loc: ev.location = loc
+        if desc: ev.description = desc
+        if url: ev.url = url
+        ev.uid = uid
+
+        cal.events.add(ev)
+        total += 1
+
+    slug = slugify(cal_name)
+    ics_rel = f"/calendars/{slug}.ics"
+    ics_path = "public" + ics_rel
+
+    with open(ics_path, "w", encoding="utf-8") as f:
+        f.writelines(cal.serialize_iter())
+
+    manifest.append({"name": cal_name, "slug": slug, "ics": ics_rel})
+    counts[cal_name] = total
+    print(f"✅ Wrote {ics_path} ({total} events)")
+
+# ---- Write manifest -------------------------------------------------------
+
+with open("public/calendars.json", "w", encoding="utf-8") as f:
+    json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+# ---- Write landing page (dropdown + buttons) -----------------------------
+
+index_html = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subscribe to Calendars</title>
+<style>
+:root{
+  --apple:#333; --google:#1A73E8; --outlook:#0078D4;
+  --bg:#0b0f1a; --card:#121826; --text:#e6eaf2; --muted:#9aa4b2; --accent:#2dd4bf;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;background:var(--bg);color:var(--text)}
+.container{max-width:900px;margin:40px auto;padding:24px}
+.card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:24px}
+h1{margin:0 0 8px;font-size:28px}
+p.lead{margin:0 0 20px;color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+select,button{font-size:16px;border-radius:10px;border:1px solid #223;padding:10px 12px;background:#0f1524;color:var(--text)}
+select{min-width:260px}
+button{cursor:pointer;transition:.15s transform ease,.2s opacity}
+button:hover{transform:translateY(-1px)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:none}
+.apple{background:var(--apple);color:#fff}
+.google{background:var(--google);color:#fff}
+.outlook{background:var(--outlook);color:#fff}
+.copy{background:var(--accent);color:#042;font-weight:600}
+.badge{display:inline-block;background:#172036;color:var(--muted);padding:6px 10px;border-radius:999px;font-size:12px;margin-left:8px}
+.footer{margin-top:16px;color:var(--muted);font-size:13px}
+.hidden{display:none}
+code{background:#0f1524;padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Subscribe to Calendars <span id="count" class="badge"></span></h1>
+      <p class="lead">Choose a calendar, then subscribe with one click. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+
+      <div class="row">
+        <label for="calSel" class="hidden">Calendar</label>
+        <select id="calSel" aria-label="Choose calendar"></select>
+        <button id="copyBtn" class="btn copy">Copy link</button>
+      </div>
+
+      <div class="row">
+        <button id="appleBtn"  class="btn apple">Apple Calendar</button>
+        <button id="googleBtn" class="btn google">Google Calendar</button>
+        <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+        <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+      </div>
+
+      <div class="footer">
+        Selected feed: <code id="linkOut"></code>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const sel = document.getElementById('calSel');
+  const copyBtn = document.getElementById('copyBtn');
+  const appleBtn = document.getElementById('appleBtn');
+  const googleBtn = document.getElementById('googleBtn');
+  const olLiveBtn = document.getElementById('olLiveBtn');
+  const olWorkBtn = document.getElementById('olWorkBtn');
+  const linkOut = document.getElementById('linkOut');
+  const countEl = document.getElementById('count');
+
+  async function loadManifest(){
+    const url = new URL('calendars.json', location.href).href;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('Failed to load calendars.json');
+    return res.json();
+  }
+
+  function absUrl(rel){ return new URL(rel, location.href).href; }
+  function currentIcsUrl(){
+    const slug = sel.value;
+    return absUrl('calendars/' + slug + '.ics');
+  }
+  function setButtons(){
+    const ics = currentIcsUrl();
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+    const enc = encodeURIComponent(ics);
+    // Apple uses webcal:// scheme
+    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
+    // Google Calendar
+    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r?cid=' + enc, '_blank');
+    // Outlook (personal)
+    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook (work/school)
+    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    linkOut.textContent = ics;
+  }
+
+  try{
+    const calendars = await loadManifest();
+    countEl.textContent = calendars.length + ' available';
+    sel.innerHTML = '';
+    calendars.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', setButtons);
+    setButtons();
+  }catch(e){
+    linkOut.textContent = 'Failed to load calendars.json';
+  }
+
+  copyBtn.onclick = async () => {
+    try{
+      await navigator.clipboard.writeText(currentIcsUrl());
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy link', 1200);
+    }catch(e){
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
+    }
+  };
+})();
+</script>
+</body>
+</html>
+"""
+
+with open("public/index.html", "w", encoding="utf-8") as f:
+    f.write(index_html)
+
+print("✅ Wrote public/calendars.json")
+print("✅ Wrote public/index.html")
+print("🎉 Build complete.")
