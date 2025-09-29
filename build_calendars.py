@@ -352,13 +352,13 @@ code{background:#0f1524;padding:2px 6px;border-radius:6px}
     const ics = currentIcsUrl();
     const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
     const enc = encodeURIComponent(ics);
-    # Apple (webcal)
+    // Apple (webcal)
     appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
-    # Google
+    // Google
     googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r?cid=' + enc, '_blank');
-    # Outlook (personal)
+    // Outlook (personal)
     olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
-    # Outlook (work/school)
+    // Outlook (work/school)
     olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
     linkOut.textContent = ics;
   }
