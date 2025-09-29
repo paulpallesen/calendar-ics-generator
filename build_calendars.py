@@ -263,37 +263,210 @@ index_html = r"""<!doctype html>
 <style>
 :root {
   /* Core background/text */
-  --bg:       #0b0f1a;
-  --card:     #121826;
-  --text:     #e6eaf2;
-  --muted:    #bfc8d5;
+  --bg:       #0b0f1a;   /* page background */
+  --card:     #121826;   /* card background */
+  --text:     #e6eaf2;   /* primary text */
+  --muted:    #bfc8d5;   /* subtext */
 
   /* Brand buttons */
-  --apple-bg:   #ffffff;
-  --apple-text: #000000;
-  --google-bg:  #1A73E8;
-  --google-text:#ffffff;
-  --outlook-bg: #0078D4;
-  --outlook-text:#ffffff;
+  --apple-bg:    #ffffff;  /* Apple btn background */
+  --apple-text:  #000000;  /* Apple btn text */
+  --google-bg:   #1A73E8;  /* Google btn background */
+  --google-text: #ffffff;  /* Google btn text */
+  --outlook-bg:  #0078D4;  /* Outlook btn background */
+  --outlook-text:#ffffff;  /* Outlook btn text */
 
   /* Copy link + badge */
-  --copy-bg:   #ffffff;
-  --copy-text: #000000;
-  --badge-bg:  #ffffff;
-  --badge-text:#000000;
+  --copy-bg:   #ffffff;  /* Copy btn background */
+  --copy-text: #000000;  /* Copy btn text */
+  --badge-bg:  #ffffff;  /* badge background */
+  --badge-text:#000000;  /* badge text */
 
   /* Accent + borders */
   --accent:    #2dd4bf;
   --border:    #2a3347;
 }
-...
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+.container{max-width:900px;margin:40px auto;padding:24px}
+.card{
+  background:var(--card);
+  border-radius:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+  padding:24px;
+  border:1px solid var(--border);
+}
+h1{margin:0 0 8px;font-size:28px}
+p.lead{margin:0 0 20px;color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+select,button{
+  font-size:16px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  padding:10px 12px;
+}
+select{
+  min-width:260px;
+  /* dropdown same color as page background per request */
+  background:var(--bg);
+  color:var(--text);
+}
+select option{color:#000;background:#fff}
+select:focus,button:focus{outline:2px solid var(--accent);outline-offset:2px}
+
+button{cursor:pointer;transition:.15s transform ease,.2s opacity}
+button:hover{transform:translateY(-1px)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:none}
+
+.apple{background:var(--apple-bg);color:var(--apple-text);border:1px solid var(--border)}
+.google{background:var(--google-bg);color:var(--google-text);border:1px solid transparent}
+.outlook{background:var(--outlook-bg);color:var(--outlook-text);border:1px solid transparent}
+.copy{background:var(--copy-bg);color:var(--copy-text);border:1px solid var(--border);font-weight:600}
+
+.badge{
+  display:inline-block;
+  background:var(--badge-bg);
+  color:var(--badge-text);
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  margin-left:8px;
+  border:1px solid var(--border);
+}
+
+.footer{margin-top:16px;color:var(--muted);font-size:13px}
+.hidden{display:none}
+code{background:#0f1524;padding:2px 6px;border-radius:6px}
+.noscript{
+  background:#fff;
+  color:#000;
+  padding:12px 14px;
+  border-radius:10px;
+  margin-top:12px;
+  display:inline-block;
+}
 </style>
 </head>
 <body>
-  <!-- (rest of HTML unchanged) -->
+  <div class="container">
+    <div class="card">
+      <h1>Subscribe to Calendars <span id="count" class="badge">loading…</span></h1>
+      <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+
+      <div class="row">
+        <label for="calSel" class="hidden">Calendar</label>
+        <select id="calSel" aria-label="Choose calendar">
+          <option disabled selected>Choose a calendar…</option>
+        </select>
+        <button id="copyBtn" class="btn copy">Copy link</button>
+      </div>
+
+      <div class="row">
+        <button id="appleBtn"  class="btn apple">Apple Calendar</button>
+        <button id="googleBtn" class="btn google">Google Calendar</button>
+        <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+        <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+      </div>
+
+      <noscript><span class="noscript">Enable JavaScript to load calendars.</span></noscript>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const sel = document.getElementById('calSel');
+  const copyBtn = document.getElementById('copyBtn');
+  const appleBtn = document.getElementById('appleBtn');
+  const googleBtn = document.getElementById('googleBtn');
+  const olLiveBtn = document.getElementById('olLiveBtn');
+  const olWorkBtn = document.getElementById('olWorkBtn');
+  const countEl = document.getElementById('count');
+
+  // Prevent totally blank page if something fails
+  function ensureVisible() {
+    document.querySelector('.card').style.visibility = 'visible';
+  }
+
+  function absUrl(rel){ return new URL(rel, location.href).href; }
+  function currentIcsUrl(){
+    const slug = sel.value;
+    return absUrl('calendars/' + slug + '.ics');
+  }
+
+  function setButtons(){
+    if (!sel.value) return;
+    const ics = currentIcsUrl();
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+    const enc = encodeURIComponent(ics);
+
+    // Apple (webcal)
+    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
+    // Google (open directly on Add by URL page)
+    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
+    // Outlook (personal)
+    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook (work/school)
+    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+  }
+
+  async function loadManifest(){
+    // cache-bust to avoid stale calendars.json
+    const url = new URL('calendars.json', location.href);
+    url.searchParams.set('ts', Date.now().toString());
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('Failed to load calendars.json');
+    return res.json();
+  }
+
+  try{
+    const calendars = await loadManifest();
+    countEl.textContent = calendars.length + ' available';
+    sel.innerHTML = '';
+    calendars.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+
+    sel.addEventListener('change', setButtons);
+    // Select first calendar automatically if present
+    if (sel.options.length > 0) {
+      sel.selectedIndex = 0;
+      setButtons();
+    }
+    ensureVisible();
+  }catch(e){
+    countEl.textContent = '0 available';
+    console.error(e);
+    alert('Could not load calendars.json. Please refresh.');
+    ensureVisible();
+  }
+
+  copyBtn.onclick = async () => {
+    if (!sel.value) return;
+    try{
+      await navigator.clipboard.writeText(currentIcsUrl());
+      const label = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = label, 1200);
+    }catch(e){
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
+    }
+  };
+})();
+</script>
 </body>
 </html>
 """
+
 
 with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
     f.write(index_html)
