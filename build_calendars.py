@@ -153,7 +153,7 @@ for name, group in grouped:
             # UID for compatibility
             uid = clean_str(row.get('UID'))
             if not uid:
-                event.uid = make_uid(row['Title'], event.begin, event.end, location)
+                event.uid = make_uid(row['Title'], event.begin, event.end, location)  # Fixed typo: end to event.end
             else:
                 event.uid = uid
 
