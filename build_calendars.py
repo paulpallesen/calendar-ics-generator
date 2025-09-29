@@ -81,7 +81,7 @@ valid_count = len(df)
 skipped_count = initial_count - valid_count
 logger.info(f"Filtered to {valid_count} valid events (skipped {skipped_count} rows with missing Title or Start Date).")
 
-# Create output directory if it doesn't exist
+# Create output directory
 Path('public/calendars').mkdir(parents=True, exist_ok=True)
 
 calendars_list = []
@@ -98,11 +98,13 @@ for name, group in grouped:
         continue
     
     cal = Calendar()
-    cal.extra.append(('X-WR-CALNAME', str(name)))  # Calendar name for Google
-    cal.extra.append(('X-WR-TIMEZONE', 'Australia/Sydney'))  # Explicit timezone for Outlook
+    cal.extra.append(('X-WR-CALNAME', str(name)))  # Set calendar name
+    cal.extra.append(('X-WR-TIMEZONE', 'Australia/Sydney'))  # Explicit timezone
     
     count = 0
     skipped_in_group = 0
+    events = []  # Temporary list to hold events
+    
     for idx, row in group.iterrows():
         try:
             event = Event()
@@ -148,7 +150,7 @@ for name, group in grouped:
             if url:
                 event.url = url
 
-            # UID for Outlook compatibility
+            # UID for compatibility
             uid = clean_str(row.get('UID'))
             if not uid:
                 event.uid = make_uid(row['Title'], event.begin, event.end, location)
@@ -160,12 +162,16 @@ for name, group in grouped:
             if trans and trans.lower() in ['true', 'yes', '1']:
                 event.transparency = 'TRANSPARENT'
 
-            cal.events.add(event)
+            events.append(event)  # Add to temporary list
             count += 1
         except Exception as e:
             logger.error(f"Failed to process event in calendar '{name}', row index {idx}: {e}")
             skipped_in_group += 1
             continue
+
+    # Add all events to calendar after processing
+    for event in events:
+        cal.events.add(event)
 
     if count > 0:
         try:
