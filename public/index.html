@@ -1,134 +1,251 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
-    <title>Subscribe to Calendars</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <title>Subscribe to Calendars</title>
     <style>
+        :root {
+            --apple: #333;
+            --google: #1A73E8;
+            --outlook: #0078D4;
+            --bg: #0b0f1a;
+            --card: #121826;
+            --text: #e6eaf2;
+            --muted: #9aa4b2;
+            --accent: #2dd4bf;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
         body {
-            font-family: sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 1em;
-            line-height: 1.5;
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text)
         }
-        select, button {
-            padding: 0.5em 1em;
-            margin: 0.25em;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 24px
         }
+
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+            padding: 24px
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 28px
+        }
+
+        p.lead {
+            margin: 0 0 20px;
+            color: var(--muted)
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 16px 0
+        }
+
+        select,
+        button {
+            font-size: 16px;
+            border-radius: 10px;
+            border: 1px solid #223;
+            padding: 10px 12px;
+            background: #0f1524;
+            color: var(--text)
+        }
+
+        select {
+            min-width: 260px
+        }
+
         button {
             cursor: pointer;
+            transition: .15s transform ease, .2s opacity
         }
-        label {
-            display: block;
-            margin-bottom: 0.5em;
-            font-weight: bold;
+
+        button:hover {
+            transform: translateY(-1px)
         }
-        #buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5em;
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border: none
         }
-        #qr-section {
-            margin-top: 1em;
-            text-align: center;
+
+        .apple {
+            background: var(--apple);
+            color: #fff
         }
-        #qr-canvas {
-            border: 1px solid #ccc;
-            margin: 0.5em auto;
-            display: none;
+
+        .google {
+            background: var(--google);
+            color: #fff
         }
-        @media (max-width: 480px) {
-            #buttons {
-                flex-direction: column;
-            }
+
+        .outlook {
+            background: var(--outlook);
+            color: #fff
+        }
+
+        .copy {
+            background: var(--accent);
+            color: #042;
+            font-weight: 600
+        }
+
+        .badge {
+            display: inline-block;
+            background: #172036;
+            color: var(--muted);
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            margin-left: 8px
+        }
+
+        .footer {
+            margin-top: 16px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        .hidden {
+            display: none
+        }
+
+        code {
+            background: #0f1524;
+            padding: 2px 6px;
+            border-radius: 6px
         }
     </style>
 </head>
+
 <body>
-    <h1>Subscribe to Calendar</h1>
-    <label for="calendar-select">Choose calendar:</label>
-    <select id="calendar-select" aria-label="Select calendar"></select>
-    <div id="buttons"></div>
-    <div id="qr-section">
-        <h2>QR Code for Subscription</h2>
-        <canvas id="qr-canvas"></canvas>
-        <p>Scan to subscribe directly.</p>
+    <div class="container">
+        <div class="card">
+            <h1>Subscribe to Calendars <span id="count" class="badge"></span></h1>
+            <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+
+            <div class="row">
+                <label for="calSel" class="hidden">Calendar</label>
+                <select id="calSel" aria-label="Choose calendar"></select>
+                <button id="copyBtn" class="btn copy">Copy link</button>
+            </div>
+
+            <div class="row">
+                <button id="appleBtn" class="btn apple">Apple Calendar</button>
+                <button id="googleBtn" class="btn google">Google Calendar</button>
+                <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+                <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+            </div>
+
+            <div class="footer">
+                Selected feed: <code id="linkOut"></code>
+            </div>
+        </div>
     </div>
+
     <script>
-        fetch('https://paulpallesen.github.io/calendar-ics-generator/calendars.json')
-            .then(r => {
-                if (!r.ok) {
-                    throw new Error(`HTTP error! status: ${r.status}`);
-                }
-                return r.json();
-            })
-            .then(data => {
-                console.log('Calendars data loaded:', data);
-                const select = document.getElementById('calendar-select');
-                data.forEach(cal => {
-                    const opt = document.createElement('option');
-                    opt.value = JSON.stringify({name: cal.name, ics: cal.ics});
-                    opt.textContent = cal.name;
-                    select.appendChild(opt);
-                });
-                if (data.length > 0) {
-                    select.value = JSON.stringify({name: data[0].name, ics: data[0].ics});
-                    updateButtons();
-                }
-                select.addEventListener('change', updateButtons);
-            })
-            .catch(err => {
-                console.error('Fetch error:', err);
-                document.getElementById('buttons').innerHTML = '<p>Error loading calendars. Check console for details.</p>';
-            });
+        (async function () {
+            const sel = document.getElementById('calSel');
+            const copyBtn = document.getElementById('copyBtn');
+            const appleBtn = document.getElementById('appleBtn');
+            const googleBtn = document.getElementById('googleBtn');
+            const olLiveBtn = document.getElementById('olLiveBtn');
+            const olWorkBtn = document.getElementById('olWorkBtn');
+            const linkOut = document.getElementById('linkOut');
+            const countEl = document.getElementById('count');
 
-        function updateButtons() {
-            const select = document.getElementById('calendar-select');
-            if (!select.value) return;
-            const val = JSON.parse(select.value);
-            const baseUrl = 'https://paulpallesen.github.io/calendar-ics-generator';
-            const icsUrl = baseUrl + val.ics;
-            const encodedIcs = encodeURIComponent(icsUrl);
-            const encodedName = encodeURIComponent(val.name);
-            const buttonsDiv = document.getElementById('buttons');
-            buttonsDiv.innerHTML = `
-                <button onclick="window.location.href='webcal://${location.host}${val.ics}'" style="background:#333333;color:white;border-color:#333333;">Apple (iCal)</button>
-                <button onclick="window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=${encodedIcs}', '_blank')" style="background:#1A73E8;color:white;border-color:#1A73E8;">Google Calendar</button>
-                <button onclick="window.open('https://outlook.live.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (personal)</button>
-                <button onclick="window.open('https://outlook.office.com/calendar/0/addfromweb?url=${encodedIcs}&name=${encodedName}', '_blank')" style="background:#0078D4;color:white;border-color:#0078D4;">Outlook (work/school)</button>
-                <button onclick="copyLink('${icsUrl}')" style="background:#666666;color:white;border-color:#666666;">Copy Subscription Link</button>
-            `;
-            const canvas = document.getElementById('qr-canvas');
-            const qrSection = document.getElementById('qr-section');
-            if (typeof QRCode !== 'undefined') {
-                QRCode.toCanvas(canvas, icsUrl, { width: 200, margin: 1 }, (error) => {
-                    if (error) {
-                        console.error('QR Code generation failed:', error);
-                        qrSection.innerHTML = '<p>Unable to generate QR code. Use the subscription link instead.</p>';
-                    } else {
-                        canvas.style.display = 'block';
-                    }
-                });
-            } else {
-                console.warn('QRCode library not loaded; QR code will not display.');
-                qrSection.innerHTML = '<p>Unable to generate QR code. Use the subscription link instead.</p>';
+            function absUrl(rel) { return new URL(rel, location.href).href; }
+
+            function currentIcsUrl() {
+                const slug = sel.value;
+                return absUrl('calendars/' + slug + '.ics');
             }
-        }
 
-        function copyLink(url) {
-            navigator.clipboard.writeText(url).then(() => {
-                const btn = event.target;
-                const original = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => { btn.textContent = original; }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy link:', err);
-            });
-        }
+            function toAppleNameFragment(name) {
+                // Apple reads the URL fragment after '#' as the default calendar name
+                // e.g. webcal://.../calendar.ics#My%20Calendar
+                return encodeURIComponent(name);
+            }
+
+            function setButtons() {
+                const ics = currentIcsUrl();
+                const name = sel.options[sel.selectedIndex].text;
+                const encIcs = encodeURIComponent(ics);
+                const encName = encodeURIComponent(name);
+
+                // Apple (prefill name via fragment)
+                const appleHref = 'webcal://' + ics.replace(/^https?:\/\//, '') + '#' + toAppleNameFragment(name);
+                appleBtn.onclick = () => location.href = appleHref;
+
+                // Google (prefill Add-by-URL)
+                const googleHref = 'https://calendar.google.com/calendar/r?cid=' + encIcs;
+                googleBtn.onclick = () => window.open(googleHref, '_blank');
+
+                // Outlook (personal) prefilled
+                const liveHref = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encIcs + '&name=' + encName;
+                olLiveBtn.onclick = () => window.open(liveHref, '_blank');
+
+                // Outlook (work/school) prefilled
+                const workHref = 'https://outlook.office.com/calendar/0/addfromweb?url=' + encIcs + '&name=' + encName;
+                olWorkBtn.onclick = () => window.open(workHref, '_blank');
+
+                linkOut.textContent = ics;
+            }
+
+            async function loadManifest() {
+                const url = new URL('calendars.json', location.href).href;
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) throw new Error('Failed to load calendars.json');
+                return res.json();
+            }
+
+            try {
+                const calendars = await loadManifest();
+                countEl.textContent = calendars.length + ' available';
+                sel.innerHTML = '';
+                calendars.forEach((c) => {
+                    const opt = document.createElement('option');
+                    opt.value = c.slug;
+                    opt.textContent = c.name;
+                    sel.appendChild(opt);
+                });
+                sel.addEventListener('change', setButtons);
+                setButtons();
+            } catch (e) {
+                linkOut.textContent = 'Failed to load calendars.json';
+            }
+
+            copyBtn.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(currentIcsUrl());
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => copyBtn.textContent = 'Copy link', 1200);
+                } catch (e) {
+                    alert('Copy failed. Link:\n' + currentIcsUrl());
+                }
+            };
+        })();
     </script>
 </body>
+
 </html>
