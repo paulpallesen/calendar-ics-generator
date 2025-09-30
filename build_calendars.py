@@ -385,7 +385,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
         <div class="select-wrap" id="selectWrap">
           <select id="calSel" aria-label="Choose calendar"></select>
         </div>
-        <button id="copyBtn">Copy</button>
+        <button id="copyBtn">Copy Link</button>
       </div>
 
       <!-- Brand buttons row -->
