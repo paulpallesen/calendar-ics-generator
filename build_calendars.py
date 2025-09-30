@@ -1,5 +1,21 @@
 # build_calendars.py
 # Google Sheet (CSV_URL secret) -> public/calendars/<slug>.ics + calendars.json + index.html
+#
+# 🎨 COLOR LEGEND (defined in :root CSS variables below)
+# Apple – #f5f5f7
+# Apple text - #000000
+# Google – #ea4335
+# Google text - #ffffff
+# Outlook – #0078d4
+# Outlook text - #ffffff
+# Background – #f6f4e8
+# Card – #881228
+# Copy link button – #ffffff
+# Copy link text – #000000
+# Chevron – #000000
+# Dropdown text - #000000
+# Title text - #ffffff
+# Sub headline - #f5f5f7
 
 import os
 import re
@@ -113,12 +129,10 @@ if not (col_start or col_start_d):
 if missing_keys:
     raise SystemExit("❌ Required columns missing: " + ", ".join(missing_keys))
 
-# Clean strings
 for c in [col_calendar, col_title, col_loc, col_desc, col_url, col_uid]:
     if c:
         df[c] = df[c].apply(clean_str)
 
-# Prepare output
 os.makedirs(ICS_DIR, exist_ok=True)
 manifest = []
 counts = {}
@@ -133,8 +147,8 @@ for cal_name in cal_order:
     if subset.empty:
         continue
 
-    # Ensure X-WR-CALNAME is a proper ContentLine (avoids tuple/list clone errors)
     from ics.grammar.parse import ContentLine
+
     cal = Calendar()
     cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
 
@@ -232,7 +246,7 @@ if total_events == 0:
 with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-# ------------------ Landing page (palette + exact widths) ------------
+# ------------------ Landing page ------------
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -240,233 +254,92 @@ index_html = r"""<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Subscribe to Calendars</title>
 <style>
-:root{
-  /* Palette (as you provided) */
-  --bg:#f6f4e8;
-  --card:#881228;
-  --title:#ffffff;
-  --sub:#f5f5f5;
+:root {
+  --bg:       #f6f4e8;
+  --card:     #881228;
+  --text:     #ffffff;
+  --muted:    #f5f5f7;
 
-  --apple-bg:#f5f5f7;  --apple-text:#000000;
-  --google-bg:#ea4335; --google-text:#ffffff;
-  --outlook-bg:#0078d4; --outlook-text:#ffffff;
+  --apple-bg:   #f5f5f7;
+  --apple-text: #000000;
+  --google-bg:  #ea4335;
+  --google-text:#ffffff;
+  --outlook-bg: #0078d4;
+  --outlook-text:#ffffff;
 
-  --copy-bg:#ffffff; --copy-text:#000000;
-
-  --dropdown-bg:#ffffff; --dropdown-text:#000000; --chevron:#000000;
-
-  --border:#1f3b7a;
-  --gap:12px; /* keep this the same gap used between buttons */
+  --copy-bg:   #ffffff;
+  --copy-text: #000000;
+  --chevron:   #000000;
+  --dropdown-text: #000000;
 }
-
-/* Base */
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--title);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
-.container{max-width:1200px;margin:40px auto;padding:0 20px}
-
-/* Compact card */
-.card{
-  background:var(--card);
-  border-radius:22px;
-  padding:24px;
-  box-shadow:0 18px 60px rgba(0,0,0,.18);
+body {
+  background: var(--bg);
+  font-family: system-ui, sans-serif;
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
 }
-
-/* Compact headings */
-h1{margin:0 0 8px;font-size:44px;line-height:1.05;font-weight:800;color:var(--title)}
-p.lead{margin:0 0 16px;font-size:18px;color:var(--sub)}
-
-/* 2-column grid: left = dropdown + left buttons; right = copy link + right buttons */
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:var(--gap);
-  align-items:center;
+.card {
+  background: var(--card);
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  text-align: center;
+  max-width: 640px;
 }
-
-/* Row 1 (dropdown + copy) */
-.selWrap{grid-column:1}
-#calSel{
-  display:block;
-  width:auto; /* JS sets exact px width = Apple + gap + Google */
-  font-size:16px;
-  padding:12px 46px 12px 14px;     /* room for chevron */
-  border-radius:14px;
-  background:var(--dropdown-bg);
-  color:var(--dropdown-text);
-  border:2px solid var(--border);
-  outline:none;
-  appearance:none;
-  min-height:48px;
-  /* Chevron */
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20' fill='%23000000'><path d='M7 10l5 5 5-5'/></svg>");
-  background-repeat:no-repeat;
-  background-position:right 18px center; /* slightly inset from far right */
-  background-size:20px;
+h1 {
+  margin-top: 0;
+  font-size: 2rem;
+  color: var(--text);
 }
-
-#copyBtn{
-  grid-column:2;
-  height:100%;
-  min-height:48px;                /* same height as dropdown */
-  font-size:16px;
-  border-radius:14px;
-  padding:12px 16px;
-  border:0;
-  background:var(--copy-bg);
-  color:var(--copy-text);
-  font-weight:800;
-  cursor:pointer;
-  box-shadow:0 2px 0 rgba(0,0,0,.22);
+p {
+  color: var(--muted);
 }
-
-/* Row 2 (buttons) */
-.btn-group{display:flex;gap:var(--gap);align-items:center}
-.left{grid-column:1}
-.right{grid-column:2}
-
-/* Compact buttons */
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;
-  padding:12px 18px;border-radius:14px;border:none;cursor:pointer;
-  font-size:18px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.18);
+select, button {
+  font-size: 16px;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
 }
-.apple{background:var(--apple-bg);color:var(--apple-text)}
-.google{background:var(--google-bg);color:var(--google-text)}
-.outlook{background:var(--outlook-bg);color:var(--outlook-text)}
-
-/* Responsive */
-@media (max-width: 900px){
-  .grid{grid-template-columns:1fr;gap:var(--gap)}
-  .selWrap{grid-column:1}
-  #calSel{width:100%}
-  #copyBtn{grid-column:1}
-  .left,.right{grid-column:1}
+.calsel {
+  color: var(--dropdown-text);
+  background: #fff;
+  appearance: none;
+  min-height: 48px;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+}
+#copyBtn {
+  min-height: 48px;
+  width: 96px; /* fixed width */
+  font-size: 18px;
+  font-weight: 800;
+  background: var(--copy-bg);
+  color: var(--copy-text);
+  margin-left: 0.5rem;
 }
 </style>
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <h1>Subscribe to Calendars</h1>
-      <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
-
-      <div class="grid">
-        <!-- Row 1 -->
-        <div class="selWrap">
-          <select id="calSel" aria-label="Choose calendar"></select>
-        </div>
-        <button id="copyBtn">Copy link</button>
-
-        <!-- Row 2 -->
-        <div id="leftGroup" class="btn-group left">
-          <button id="appleBtn" class="btn apple">Apple Calendar</button>
-          <button id="googleBtn" class="btn google">Google Calendar</button>
-        </div>
-        <div id="rightGroup" class="btn-group right">
-          <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
-          <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
-        </div>
-      </div>
+  <div class="card">
+    <h1>Subscribe to Calendars</h1>
+    <div>
+      <select class="calsel" id="calendarSelect"></select>
+      <button id="copyBtn">Copy</button>
+    </div>
+    <div style="margin-top:1rem;">
+      <button style="background:var(--apple-bg);color:var(--apple-text);">Apple</button>
+      <button style="background:var(--google-bg);color:var(--google-text);">Google</button>
+      <button style="background:var(--outlook-bg);color:var(--outlook-text);">Outlook</button>
     </div>
   </div>
-
-<script>
-(async function(){
-  const sel = document.getElementById('calSel');
-  const copyBtn = document.getElementById('copyBtn');
-  const appleBtn = document.getElementById('appleBtn');
-  const googleBtn = document.getElementById('googleBtn');
-  const olLiveBtn = document.getElementById('olLiveBtn');
-  const olWorkBtn = document.getElementById('olWorkBtn');
-  const leftGroup = document.getElementById('leftGroup');
-
-  async function loadManifest(){
-    const url = new URL('calendars.json', location.href).href;
-    const res = await fetch(url, {cache:'no-store'});
-    if(!res.ok) throw new Error('Failed to load calendars.json');
-    return res.json();
-  }
-
-  function absUrl(rel){ return new URL(rel, location.href).href; }
-  function currentIcsUrl(){
-    const slug = sel.value;
-    return absUrl('calendars/' + slug + '.ics');
-  }
-
-  function setButtons(){
-    const ics = currentIcsUrl();
-    const enc = encodeURIComponent(ics);
-    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
-
-    // Apple (webcal)
-    appleBtn.onclick = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
-
-    // Google: open "Add by URL"
-    googleBtn.onclick = () => window.open(
-      'https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc,
-      '_blank'
-    );
-
-    // Outlook personal
-    olLiveBtn.onclick = () => window.open(
-      'https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name,
-      '_blank'
-    );
-
-    // Outlook work/school
-    olWorkBtn.onclick = () => window.open(
-      'https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name,
-      '_blank'
-    );
-  }
-
-  // Make dropdown width = Apple + gap + Google (exact)
-  function syncWidths(){
-    if (window.matchMedia('(max-width: 900px)').matches){
-      sel.style.width = '100%';
-      return;
-    }
-    requestAnimationFrame(() => {
-      const leftWidth = document.getElementById('leftGroup').getBoundingClientRect().width;
-      if (leftWidth > 0){
-        sel.style.width = Math.round(leftWidth) + 'px';
-      }
-    });
-  }
-
-  try{
-    const calendars = await loadManifest();
-    sel.innerHTML = '';
-    calendars.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.slug;
-      opt.textContent = c.name;
-      sel.appendChild(opt);
-    });
-    sel.addEventListener('change', setButtons);
-    setButtons();
-  }catch(e){
-    sel.innerHTML = '<option>Failed to load calendars</option>';
-  }
-
-  // Keep widths in sync with rendering
-  window.addEventListener('load', syncWidths);
-  window.addEventListener('resize', syncWidths);
-  setTimeout(syncWidths, 0);
-
-  copyBtn.addEventListener('click', async () => {
-    try{
-      await navigator.clipboard.writeText(currentIcsUrl());
-      const old = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      setTimeout(() => copyBtn.textContent = old, 1000);
-    }catch(e){
-      alert('Copy failed. Link:\\n' + currentIcsUrl());
-    }
-  });
-})();
-</script>
 </body>
 </html>
 """
