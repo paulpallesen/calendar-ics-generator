@@ -247,6 +247,7 @@ with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 # ------------------ Landing page ------------
+
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -262,7 +263,7 @@ index_html = r"""<!doctype html>
   --muted: #f5f5f5;      /* subheadline */
 
   /* Brands */
-  --apple-bg:   #f5f5f7; --apple-text:   #000000;
+  --apple-bg:   #979797; --apple-text:   #ffffff;
   --google-bg:  #ea4335; --google-text:  #ffffff;
   --outlook-bg: #0078d4; --outlook-text: #ffffff;
 
@@ -297,7 +298,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   border-radius:14px;
   background:#fff;
   box-shadow:0 1px 0 rgba(0,0,0,.12), 0 6px 18px rgba(0,0,0,.18);
-  padding:0 18px;          /* even padding; select will add right padding for chevron */
+  padding:0 24px;          /* even padding; select will add right padding for chevron */
   overflow:hidden;         /* ensures select stays within */
 }
 #calSel{
