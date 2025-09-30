@@ -10,7 +10,8 @@
 # Outlook text - #ffffff
 # Background – #f6f4e8
 # Card – #881228
-# Copy link button – #000000 (bg) / #ffffff (text)
+# Copy link button – #000000
+# Copy link text – #ffffff
 # Chevron – #000000
 # Dropdown text - #000000
 # Title text - #ffffff
@@ -128,12 +129,10 @@ if not (col_start or col_start_d):
 if missing_keys:
     raise SystemExit("❌ Required columns missing: " + ", ".join(missing_keys))
 
-# Clean common strings
 for c in [col_calendar, col_title, col_loc, col_desc, col_url, col_uid]:
     if c:
         df[c] = df[c].apply(clean_str)
 
-# Prepare output
 os.makedirs(ICS_DIR, exist_ok=True)
 manifest = []
 counts = {}
@@ -141,14 +140,14 @@ cal_order = list(dict.fromkeys(df[col_calendar].tolist()))
 total_events = 0
 per_calendar_debug = []
 
-from ics.grammar.parse import ContentLine  # (once, top-level)
-
 for cal_name in cal_order:
     if not cal_name:
         continue
     subset = df[df[col_calendar] == cal_name]
     if subset.empty:
         continue
+
+    from ics.grammar.parse import ContentLine
 
     cal = Calendar()
     cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
@@ -160,10 +159,8 @@ for cal_name in cal_order:
         if not title:
             continue
 
-        # Build start/end timestamps from either combined or split columns
         start_dt = None
         end_dt = None
-
         if col_start:
             start_dt = parse_dt(r.get(col_start))
         elif col_start_d:
@@ -175,16 +172,13 @@ for cal_name in cal_order:
             end_dt = combine_date_time(r.get(col_end_d), r.get(col_end_t))
 
         if start_dt is None and end_dt is None:
-            # nothing to place on a calendar
             continue
 
-        # Determine all-day
         allday_flag = False
         if col_allday:
             v = str(r.get(col_allday)).strip().lower()
             allday_flag = v in ("true", "1", "yes", "y")
 
-        # If both times are blank or midnight and not explicitly timed, treat as all-day
         if not allday_flag:
             if (start_dt is not None and is_midnight(start_dt)) and (end_dt is None or is_midnight(end_dt)):
                 allday_flag = True
@@ -193,9 +187,7 @@ for cal_name in cal_order:
         ev.name = title
 
         if allday_flag:
-            # All-day: use date parts and ensure DTEND > DTSTART (non-inclusive)
             if start_dt is None and end_dt is not None:
-                # If only End exists, default to single-day ending date
                 start_dt = end_dt
             ev.begin = start_dt.date()
             ev.make_all_day()
@@ -204,7 +196,6 @@ for cal_name in cal_order:
             else:
                 ev.end = end_dt.date()
         else:
-            # Timed: ensure End > Start
             if start_dt is None and end_dt is not None:
                 start_dt = end_dt - pd.Timedelta(hours=DEFAULT_TIMED_DURATION_HOURS)
             if end_dt is None or end_dt <= start_dt:
@@ -212,7 +203,6 @@ for cal_name in cal_order:
             ev.begin = start_dt
             ev.end = end_dt
 
-        # Optional fields
         if col_loc:  ev.location    = clean_str(r.get(col_loc)) or None
         if col_desc: ev.description = clean_str(r.get(col_desc)) or None
         if col_url:  ev.url         = clean_str(r.get(col_url)) or None
@@ -229,16 +219,13 @@ for cal_name in cal_order:
         created += 1
         total_events += 1
 
-    # Write ICS if any events for this calendar
     slug = slugify(cal_name)
     rel_ics = f"/calendars/{slug}.ics"
     if rel_ics.endswith("}"):
         rel_ics = rel_ics[:-1]
     ics_path = os.path.join(OUT_DIR, rel_ics.lstrip("/"))
 
-    # Keep a small debug record
     per_calendar_debug.append((cal_name, created))
-
     with open(ics_path, "w", encoding="utf-8") as f:
         f.writelines(cal.serialize_iter())
 
@@ -246,23 +233,21 @@ for cal_name in cal_order:
     counts[cal_name] = created
     print(f"✅ Wrote {ics_path} ({created} events)")
 
-# Diagnostics summary
 print("—— Summary ——")
 print(f"Calendars found: {len(per_calendar_debug)}")
 for name, cnt in per_calendar_debug:
     print(f"  • {name}: {cnt} events")
 print(f"Total events across all calendars: {total_events}")
 
-# If zero events, fail with helpful info
 if total_events == 0:
     print("❌ No events were generated. Please verify your sheet.")
     raise SystemExit(1)
 
-# ------------------ Write manifest ----------
 with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 # ------------------ Landing page ------------
+
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -283,13 +268,13 @@ index_html = r"""<!doctype html>
   --outlook-bg: #0078d4; --outlook-text: #ffffff;
 
   /* Controls */
-  --copy-bg:#000000; --copy-text:#ffffff;          /* per your request */
+  --copy-bg:#000000; --copy-text:#ffffff;
   --dropdown-text:#000000; --chev:#000000;
 
   /* Layout + sizing */
   --radius: 18px;
-  --gap: 14px;             /* gap between items in rows */
-  --control-h: 62px;       /* dropdown + copy height (desktop) */
+  --gap: 14px;             /* gap between items in rows (desktop) */
+  --control-h: 62px;       /* dropdown + copy height */
   --shadow: 0 24px 48px rgba(0,0,0,.15);
 }
 
@@ -313,7 +298,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   border-radius:14px;
   background:#fff;
   box-shadow:0 1px 0 rgba(0,0,0,.12), 0 6px 18px rgba(0,0,0,.18);
-  padding:0 24px;          /* even padding; select will add right padding for chevron */
+  padding:0 24px;          /* even padding; select adds right padding for chevron */
   overflow:hidden;         /* ensures select stays within */
 }
 #calSel{
@@ -326,15 +311,15 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   height:100%;
   width:100%;              /* fill wrapper so whole area is clickable */
   display:block;
-  padding-right:32px;      /* reserve room for chevron */
+  padding-right:32px;      /* room for chevron */
   cursor:pointer;
 }
 .select-wrap:after{
   content:"";
   position:absolute;
-  right:10px;              /* slightly inset */
+  right:6px;               /* moved further left (was 10px) */
   top:50%;
-  width:10px; height:10px; /* smaller chevron */
+  width:10px; height:10px; /* compact chevron */
   transform:translateY(-50%) rotate(45deg);
   border-right:2px solid var(--chev);
   border-bottom:2px solid var(--chev);
@@ -342,7 +327,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   pointer-events:none;     /* chevron never blocks clicks */
 }
 
-/* Copy button — same height as dropdown (desktop) */
+/* Copy button — same height as dropdown, fixed width 96px */
 #copyBtn{
   height:var(--control-h);
   width:96px;
@@ -376,17 +361,16 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 
 /* ---------- Mobile layout (<=760px) ---------- */
 @media (max-width:760px){
-  :root{
-    --control-h: 56px;            /* slightly shorter controls on mobile */
-  }
-  .row{gap:12px}
+  :root{ --control-h: 56px; }
+  .row{gap:0} /* reset; use margins for perfect uniform spacing */
   h1{font-size:34px}
-  #calSel{font-size:18px}         /* slightly smaller so long names fit */
-  /* Make dropdown and all buttons full-width and same width */
+  #calSel{font-size:18px}
   #rowControls, #rowBrands{flex-direction:column; align-items:stretch}
-  .select-wrap{width:100% !important}
-  #copyBtn{width:100%}
-  #appleBtn, #googleBtn, #olLiveBtn, #olWorkBtn{width:100%}
+  .select-wrap, #copyBtn, #appleBtn, #googleBtn, #olLiveBtn, #olWorkBtn{
+    width:100%;
+    margin-top:12px;       /* uniform vertical gap for all stacked controls */
+  }
+  .select-wrap:first-child{margin-top:0}  /* first item no top margin */
 }
 </style>
 </head>
@@ -461,11 +445,11 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
       b.textContent = 'Copied!';
       setTimeout(()=>b.textContent=old, 1200);
     }catch(e){
-      alert('Copy failed. Link:\\n' + currentIcsUrl());
+      alert('Copy failed. Link:\n' + currentIcsUrl());
     }
   };
 
-  // --- Auto width for dropdown: Apple width + gap + Google width (desktop) ---
+  // --- Auto width for dropdown: Apple width + gap + Google width ---
   function syncDropdownWidth(){
     const apple  = document.getElementById('appleBtn');
     const google = document.getElementById('googleBtn');
@@ -474,15 +458,9 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 
     if (!apple || !google || !wrap || !brandsRow) return;
 
-    // On mobile layout we use full width; skip measuring
-    const isMobile = window.matchMedia('(max-width: 760px)').matches;
-    if (isMobile){
-      wrap.style.width = '100%';
-      return;
-    }
-
     const gap = parseFloat(getComputedStyle(brandsRow).gap || '14');
     const width = apple.offsetWidth + gap + google.offsetWidth;
+
     wrap.style.width = width + 'px';          // dropdown width
   }
 
@@ -522,6 +500,9 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 </body>
 </html>
 """
+
+with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
     f.write(index_html)
