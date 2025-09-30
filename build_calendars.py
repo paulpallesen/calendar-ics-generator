@@ -247,6 +247,7 @@ with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 # ------------------ Landing page ------------
+
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -255,170 +256,198 @@ index_html = r"""<!doctype html>
 <title>Subscribe to Calendars</title>
 <style>
 :root{
-  /* Palette (your choices) */
-  --bg:#f6f4e8;
-  --card:#881228;
-  --text:#ffffff;
-  --muted:#f5f5f7;
+  /* Core palette */
+  --bg: #f6f4e8;         /* page background */
+  --card: #881228;       /* card background */
+  --text: #ffffff;       /* main title text */
+  --muted: #f5f5f5;      /* subheadline */
 
-  --apple-bg:#f5f5f7;   --apple-text:#000000;
-  --google-bg:#ea4335;  --google-text:#ffffff;
-  --outlook-bg:#0078d4; --outlook-text:#ffffff;
+  /* Brands */
+  --apple-bg:   #f5f5f7; --apple-text:   #000000;
+  --google-bg:  #ea4335; --google-text:  #ffffff;
+  --outlook-bg: #0078d4; --outlook-text: #ffffff;
 
-  --copy-bg:#ffffff;    --copy-text:#000000;
-  --dd-text:#000000;    --chev:#000000;
+  /* Controls */
+  --copy-bg:#ffffff; --copy-text:#000000;
+  --dropdown-text:#000000; --chev:#000000;
 
-  /* Sizes & spacing */
-  --radius:16px;
-  --gap:12px;
-  --control-h:48px;
-  --copy-w:96px;     /* fixed width for Copy link */
+  /* Layout + sizing */
+  --radius: 18px;
+  --gap: 14px;             /* gap between items in rows */
+  --control-h: 62px;       /* dropdown + copy height */
+  --shadow: 0 24px 48px rgba(0,0,0,.15);
 }
 
-/* Page */
 *{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;
-  background:var(--bg);
-  color:var(--text);
-  display:flex;
-  justify-content:center;
-  align-items:flex-start;
-  padding:40px 16px;
-}
+html,body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;color:var(--text)}
 
-/* Card */
-.card{
-  width:min(1200px,100%);
-  background:var(--card);
-  border-radius:var(--radius);
-  box-shadow:0 18px 60px rgba(0,0,0,.25);
-  padding:28px;
-}
+.container{max-width:1080px;margin:44px auto;padding:0 20px}
+.card{background:var(--card);border-radius:28px;box-shadow:var(--shadow);padding:28px 28px 32px}
 
-/* Title + sub */
-h1{margin:0 0 6px;font-size:clamp(22px,3.4vw,36px);letter-spacing:.3px}
-.lead{margin:0 0 18px;color:var(--muted);font-size:clamp(14px,2.3vw,18px)}
-.lead em{font-style:italic}
+h1{margin:0 0 10px;font-size:40px;letter-spacing:.2px}
+p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 
-/* Layout rows */
-.row{display:flex;flex-wrap:wrap;gap:var(--gap);align-items:center}
+.row{display:flex;align-items:center;gap:var(--gap);flex-wrap:wrap}
 
-/* Top row: dropdown + copy aligned on one line */
-.topline{
-  display:flex;align-items:center;gap:var(--gap);
-  margin-bottom:14px;
-}
-
-/* Dropdown — wide and readable */
-select.calsel{
-  color:var(--dd-text);
-  background:#fff;
+/* --- Select (dropdown) --- */
+.select-wrap{
+  position:relative;
   height:var(--control-h);
-  border-radius:12px;
-  border:2px solid #0b66e4; /* subtle highlight to match earlier look */
-  padding:0 2.4rem 0 14px;  /* space for chevron */
-  font-size:16px;
-  min-width:600px;          /* << keep it comfortably wide */
-  width:clamp(540px, 52vw, 760px); /* responsive width, wide on large screens */
-
-  /* Chevron */
+  display:inline-flex;
+  align-items:center;
+  border-radius:14px;
+  background:#fff;
+  box-shadow:0 1px 0 rgba(0,0,0,.12), 0 6px 18px rgba(0,0,0,.18);
+  padding:0 56px 0 18px;  /* leave space for chevron */
+}
+#calSel{
   appearance:none;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23000'><path d='M7 10l5 5 5-5'/></svg>");
-  background-repeat:no-repeat;
-  background-size:16px;
-  background-position:right 0.9rem center; /* not all the way right */
+  border:none;
+  outline:none;
+  font-size:20px;
+  color:var(--dropdown-text);
+  background:transparent;
+  height:100%;
+  min-width:140px;     /* safety minimum */
+}
+.select-wrap:after{
+  content:"";
+  position:absolute;
+  right:16px;
+  top:50%;
+  width:12px; height:12px;
+  transform:translateY(-50%) rotate(45deg);
+  border-right:3px solid var(--chev);
+  border-bottom:3px solid var(--chev);
+  opacity:.9;
 }
 
-/* Copy link button (fixed width = 96px) */
+/* Copy button — same height as dropdown */
 #copyBtn{
   height:var(--control-h);
-  width:var(--copy-w);
+  padding:0 18px;
+  border:none;
+  border-radius:14px;
   background:var(--copy-bg);
   color:var(--copy-text);
-  border:none;border-radius:12px;
-  font-weight:800;font-size:16px;letter-spacing:.2px;
+  font-size:20px;
+  font-weight:700;
   cursor:pointer;
+  box-shadow:0 1px 0 rgba(0,0,0,.12), 0 6px 18px rgba(0,0,0,.18);
 }
 
 /* Brand buttons row */
-.btns .btn{
-  height:46px;
-  border:none;border-radius:12px;
-  padding:0 18px;
-  font-size:16px;font-weight:600;
-  cursor:pointer;
+.btn{border:none;border-radius:14px;cursor:pointer;padding:12px 20px;font-size:20px;font-weight:700}
+.apple{background:var(--apple-bg);color:var(--apple-text)}
+.google{background:var(--google-bg);color:var(--google-text)}
+.outlook{background:var(--outlook-bg);color:var(--outlook-text)}
+
+/* Simple responsive tuck */
+@media (max-width:760px){
+  .row{gap:12px}
+  h1{font-size:34px}
+  .select-wrap{width:100% !important}
+  #copyBtn{width:100%}
 }
-.btn.apple  {background:var(--apple-bg);  color:var(--apple-text);}
-.btn.google {background:var(--google-bg); color:var(--google-text);}
-.btn.olpers {background:var(--outlook-bg);color:var(--outlook-text);}
-.btn.olwork {background:var(--outlook-bg);color:var(--outlook-text);}
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Subscribe to Calendars</h1>
-    <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+  <div class="container">
+    <div class="card">
+      <h1>Subscribe to Calendars</h1>
+      <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
 
-    <!-- Top line: dropdown + Copy link -->
-    <div class="topline">
-      <label class="sr-only" for="calSel">Calendar</label>
-      <select id="calSel" class="calsel" aria-label="Choose calendar"></select>
-      <button id="copyBtn" type="button">Copy</button>
-    </div>
+      <!-- Controls row (dropdown + copy) -->
+      <div class="row" id="rowControls">
+        <div class="select-wrap" id="selectWrap">
+          <select id="calSel" aria-label="Choose calendar"></select>
+        </div>
+        <button id="copyBtn">Copy link</button>
+      </div>
 
-    <!-- Brand buttons -->
-    <div class="row btns">
-      <button id="appleBtn"  class="btn apple"  type="button">Apple Calendar</button>
-      <button id="googleBtn" class="btn google" type="button">Google Calendar</button>
-      <button id="olLiveBtn" class="btn olpers" type="button">Outlook (personal)</button>
-      <button id="olWorkBtn" class="btn olwork" type="button">Outlook (work/school)</button>
+      <!-- Brand buttons row -->
+      <div class="row" id="rowBrands" style="margin-top:16px">
+        <button id="appleBtn"  class="btn apple">Apple Calendar</button>
+        <button id="googleBtn" class="btn google">Google Calendar</button>
+        <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+        <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+      </div>
     </div>
   </div>
 
 <script>
 (async function(){
-  const sel      = document.getElementById('calSel');
-  const copyBtn  = document.getElementById('copyBtn');
-  const appleBtn = document.getElementById('appleBtn');
-  const googleBtn= document.getElementById('googleBtn');
-  const olLiveBtn= document.getElementById('olLiveBtn');
-  const olWorkBtn= document.getElementById('olWorkBtn');
-
-  function absUrl(rel){ return new URL(rel, location.href).href; }
-  function currentIcsUrl(){
-    const slug = sel.value;
-    return absUrl('calendars/' + slug + '.ics');
-  }
-
+  // Load manifest
   async function loadManifest(){
-    const res = await fetch(absUrl('calendars.json'), {cache:'no-store'});
+    const url = new URL('calendars.json', location.href).href;
+    const res = await fetch(url, {cache:'no-store'});
     if(!res.ok) throw new Error('Failed to load calendars.json');
     return res.json();
   }
-
-  function setButtons(){
-    const ics  = currentIcsUrl();
-    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
-    const enc  = encodeURIComponent(ics);
-
-    // Apple calendar (webcal)
-    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
-    // Google "Add by URL" page (pre-populates the URL field)
-    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
-    // Outlook (personal)
-    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
-    // Outlook (work/school)
-    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+  function absUrl(rel){ return new URL(rel, location.href).href; }
+  function currentIcsUrl(){
+    const sel = document.getElementById('calSel');
+    return absUrl('calendars/' + sel.value + '.ics');
   }
 
-  // Populate dropdown
+  // Wire buttons (uses current dropdown selection)
+  function setButtons(){
+    const sel = document.getElementById('calSel');
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+    const enc  = encodeURIComponent(currentIcsUrl());
+
+    // Apple (webcal)
+    document.getElementById('appleBtn').onclick = () =>
+      location.href = 'webcal://' + currentIcsUrl().replace(/^https?:\/\//,'');
+
+    // Google: open Add-by-URL with cid prefilled
+    document.getElementById('googleBtn').onclick = () =>
+      window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid='+enc, '_blank');
+
+    // Outlook (personal)
+    document.getElementById('olLiveBtn').onclick = () =>
+      window.open('https://outlook.live.com/calendar/0/addfromweb?url='+enc+'&name='+name, '_blank');
+
+    // Outlook (work/school)
+    document.getElementById('olWorkBtn').onclick = () =>
+      window.open('https://outlook.office.com/calendar/0/addfromweb?url='+enc+'&name='+name, '_blank');
+  }
+
+  // Copy link
+  document.getElementById('copyBtn').onclick = async () => {
+    try{
+      await navigator.clipboard.writeText(currentIcsUrl());
+      const b = document.getElementById('copyBtn');
+      const old = b.textContent;
+      b.textContent = 'Copied!';
+      setTimeout(()=>b.textContent=old, 1200);
+    }catch(e){
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
+    }
+  };
+
+  // --- Auto width for dropdown: Apple width + gap + Google width ---
+  function syncDropdownWidth(){
+    const apple  = document.getElementById('appleBtn');
+    const google = document.getElementById('googleBtn');
+    const wrap   = document.getElementById('selectWrap');
+    const brandsRow = document.getElementById('rowBrands');
+
+    if (!apple || !google || !wrap || !brandsRow) return;
+
+    const gap = parseFloat(getComputedStyle(brandsRow).gap || '14');
+    const width = apple.offsetWidth + gap + google.offsetWidth;
+
+    wrap.style.width = width + 'px';          // dropdown width
+    // height is already tied via CSS var --control-h
+  }
+
+  // Populate dropdown from manifest, then size + wire
   try{
     const calendars = await loadManifest();
+    const sel = document.getElementById('calSel');
     sel.innerHTML = '';
-    calendars.forEach(c => {
+    calendars.forEach((c) => {
       const opt = document.createElement('option');
       opt.value = c.slug;
       opt.textContent = c.name;
@@ -426,21 +455,12 @@ select.calsel{
     });
     sel.addEventListener('change', setButtons);
     setButtons();
+    // Defer to ensure buttons have layout
+    requestAnimationFrame(syncDropdownWidth);
+    window.addEventListener('resize', syncDropdownWidth);
   }catch(e){
-    sel.innerHTML = '<option value="">(failed to load)</option>';
+    console.error(e);
   }
-
-  // Copy link
-  copyBtn.onclick = async () =>{
-    try{
-      await navigator.clipboard.writeText(currentIcsUrl());
-      const old = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      setTimeout(()=>copyBtn.textContent = old, 1200);
-    }catch{
-      alert('Copy failed. Link:\\n' + currentIcsUrl());
-    }
-  };
 })();
 </script>
 </body>
