@@ -253,14 +253,14 @@ index_html = r"""<!doctype html>
 <style>
 :root{
   /* Palette (centralized) */
-  --bg:#0a0f16;            /* page background */
-  --card:#101826;          /* card background */
-  --text:#dde7f6;          /* main text */
-  --muted:#a4b5c9;         /* sub text */
+  --bg:#f6f4e9;            /* page background */
+  --card:#881328;          /* card background */
+  --text:#ffffff;          /* main text */
+  --muted:#f5f5f5;         /* sub text */
 
-  --apple-bg:#ffffff;      /* apple btn bg */
+  --apple-bg:#f5f5f7;      /* apple btn bg */
   --apple-text:#000000;    /* apple btn text */
-  --google-bg:#1A73E8;     /* google btn bg */
+  --google-bg:#ea4335;     /* google btn bg */
   --google-text:#ffffff;   /* google btn text */
   --outlook-bg:#0A74DA;    /* outlook btn bg */
   --outlook-text:#ffffff;  /* outlook btn text */
