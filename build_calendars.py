@@ -241,12 +241,13 @@ index_html = r"""<!doctype html>
 <title>Subscribe to Calendars</title>
 <style>
 :root{
+  /* Palette (as you provided) */
   --bg:#f6f4e8;
   --card:#881228;
   --title:#ffffff;
   --sub:#f5f5f5;
 
-  --apple-bg:#f5f5f7; --apple-text:#000000;
+  --apple-bg:#f5f5f7;  --apple-text:#000000;
   --google-bg:#ea4335; --google-text:#ffffff;
   --outlook-bg:#0078d4; --outlook-text:#ffffff;
 
@@ -255,85 +256,88 @@ index_html = r"""<!doctype html>
   --dropdown-bg:#ffffff; --dropdown-text:#000000; --chevron:#000000;
 
   --border:#1f3b7a;
-  --gap:12px; /* same spacing used between buttons */
+  --gap:12px; /* keep this the same gap used between buttons */
 }
 
+/* Base */
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--title);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
-.container{max-width:1200px;margin:48px auto;padding:0 20px}
+.container{max-width:1200px;margin:40px auto;padding:0 20px}
+
+/* Compact card */
 .card{
   background:var(--card);
-  border-radius:28px;
-  padding:36px;
-  box-shadow:0 18px 60px rgba(0,0,0,.25);
+  border-radius:22px;
+  padding:24px;
+  box-shadow:0 18px 60px rgba(0,0,0,.18);
 }
 
-h1{margin:0 0 6px;font-size:56px;line-height:1.05;font-weight:800;color:var(--title)}
-p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
+/* Compact headings */
+h1{margin:0 0 8px;font-size:44px;line-height:1.05;font-weight:800;color:var(--title)}
+p.lead{margin:0 0 16px;font-size:18px;color:var(--sub)}
 
-/* 2-column grid: left column = dropdown + left buttons; right column = copy + right buttons */
+/* 2-column grid: left = dropdown + left buttons; right = copy link + right buttons */
 .grid{
   display:grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns:1fr 1fr;
   gap:var(--gap);
   align-items:center;
-  margin-top:14px;
 }
 
-/* Wrap the select so we can set its width precisely via JS */
+/* Row 1 (dropdown + copy) */
 .selWrap{grid-column:1}
 #calSel{
   display:block;
-  width:auto; /* JS will set exact px width to match Apple+gap+Google */
-  font-size:18px;
-  padding:14px 54px 14px 16px; /* room for chevron */
-  border-radius:16px;
+  width:auto; /* JS sets exact px width = Apple + gap + Google */
+  font-size:16px;
+  padding:12px 46px 12px 14px;     /* room for chevron */
+  border-radius:14px;
   background:var(--dropdown-bg);
   color:var(--dropdown-text);
-  border:3px solid var(--border);
+  border:2px solid var(--border);
   outline:none;
   appearance:none;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='22' height='22' fill='%23000000'><path d='M7 10l5 5 5-5'/></svg>");
+  min-height:48px;
+  /* Chevron */
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20' fill='%23000000'><path d='M7 10l5 5 5-5'/></svg>");
   background-repeat:no-repeat;
-  background-position:right 22px center; /* chevron slight indent from far right */
-  background-size:22px;
-  min-height:54px;
+  background-position:right 18px center; /* slightly inset from far right */
+  background-size:20px;
 }
 
-/* Copy link aligns to right column (same start as Outlook personal) */
 #copyBtn{
   grid-column:2;
   height:100%;
-  min-height:54px;
-  font-size:18px;
-  border-radius:16px;
-  padding:14px 20px;
+  min-height:48px;                /* same height as dropdown */
+  font-size:16px;
+  border-radius:14px;
+  padding:12px 16px;
   border:0;
   background:var(--copy-bg);
   color:var(--copy-text);
   font-weight:800;
   cursor:pointer;
-  box-shadow:0 2px 0 rgba(0,0,0,.25);
+  box-shadow:0 2px 0 rgba(0,0,0,.22);
 }
 
-/* Second row: two button groups */
+/* Row 2 (buttons) */
 .btn-group{display:flex;gap:var(--gap);align-items:center}
 .left{grid-column:1}
 .right{grid-column:2}
 
-/* Brand buttons */
+/* Compact buttons */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
-  padding:16px 22px;border-radius:16px;border:none;cursor:pointer;
-  font-size:22px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.2);
+  padding:12px 18px;border-radius:14px;border:none;cursor:pointer;
+  font-size:18px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.18);
 }
 .apple{background:var(--apple-bg);color:var(--apple-text)}
 .google{background:var(--google-bg);color:var(--google-text)}
 .outlook{background:var(--outlook-bg);color:var(--outlook-text)}
 
-/* Responsive: stack and let select be full-width */
+/* Responsive */
 @media (max-width: 900px){
-  .grid{grid-template-columns: 1fr;gap:var(--gap)}
+  .grid{grid-template-columns:1fr;gap:var(--gap)}
   .selWrap{grid-column:1}
   #calSel{width:100%}
   #copyBtn{grid-column:1}
@@ -370,14 +374,12 @@ p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
 <script>
 (async function(){
   const sel = document.getElementById('calSel');
-  const selWrap = document.querySelector('.selWrap');
   const copyBtn = document.getElementById('copyBtn');
   const appleBtn = document.getElementById('appleBtn');
   const googleBtn = document.getElementById('googleBtn');
   const olLiveBtn = document.getElementById('olLiveBtn');
   const olWorkBtn = document.getElementById('olWorkBtn');
   const leftGroup = document.getElementById('leftGroup');
-  const rightGroup = document.getElementById('rightGroup');
 
   async function loadManifest(){
     const url = new URL('calendars.json', location.href).href;
@@ -400,31 +402,33 @@ p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
     // Apple (webcal)
     appleBtn.onclick = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
 
-    // Google: deep link to "Add by URL"
-    googleBtn.onclick = () => {
-      const u = 'https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc;
-      window.open(u, '_blank');
-    };
+    // Google: open "Add by URL"
+    googleBtn.onclick = () => window.open(
+      'https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc,
+      '_blank'
+    );
 
-    // Outlook (personal)
-    olLiveBtn.onclick = () =>
-      window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook personal
+    olLiveBtn.onclick = () => window.open(
+      'https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name,
+      '_blank'
+    );
 
-    // Outlook (work/school)
-    olWorkBtn.onclick = () =>
-      window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook work/school
+    olWorkBtn.onclick = () => window.open(
+      'https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name,
+      '_blank'
+    );
   }
 
-  // Make the dropdown width match EXACTLY Apple + gap + Google (i.e., the left group width)
+  // Make dropdown width = Apple + gap + Google (exact)
   function syncWidths(){
-    // On small screens we let CSS make it 100%
     if (window.matchMedia('(max-width: 900px)').matches){
       sel.style.width = '100%';
       return;
     }
-    // Force measurement after layout
     requestAnimationFrame(() => {
-      const leftWidth = leftGroup.getBoundingClientRect().width;
+      const leftWidth = document.getElementById('leftGroup').getBoundingClientRect().width;
       if (leftWidth > 0){
         sel.style.width = Math.round(leftWidth) + 'px';
       }
@@ -446,10 +450,9 @@ p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
     sel.innerHTML = '<option>Failed to load calendars</option>';
   }
 
-  // When fonts load / window resizes, re-measure to keep exact match
+  // Keep widths in sync with rendering
   window.addEventListener('load', syncWidths);
   window.addEventListener('resize', syncWidths);
-  // Also sync after a tick so buttons finish sizing
   setTimeout(syncWidths, 0);
 
   copyBtn.addEventListener('click', async () => {
@@ -457,7 +460,7 @@ p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
       await navigator.clipboard.writeText(currentIcsUrl());
       const old = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
-      setTimeout(() => copyBtn.textContent = old, 1100);
+      setTimeout(() => copyBtn.textContent = old, 1000);
     }catch(e){
       alert('Copy failed. Link:\\n' + currentIcsUrl());
     }
