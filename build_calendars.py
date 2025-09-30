@@ -10,7 +10,6 @@ from hashlib import md5
 import requests
 import pandas as pd
 from ics import Calendar, Event
-from ics.grammar.parse import ContentLine
 
 # ------------------ Config ------------------
 DAYFIRST = True                     # interpret dates as DD/MM/YYYY
@@ -114,7 +113,7 @@ if not (col_start or col_start_d):
 if missing_keys:
     raise SystemExit("❌ Required columns missing: " + ", ".join(missing_keys))
 
-# Clean common string columns
+# Clean strings
 for c in [col_calendar, col_title, col_loc, col_desc, col_url, col_uid]:
     if c:
         df[c] = df[c].apply(clean_str)
@@ -134,9 +133,11 @@ for cal_name in cal_order:
     if subset.empty:
         continue
 
+    # Ensure X-WR-CALNAME is a proper ContentLine (avoids tuple/list clone errors)
+    from ics.grammar.parse import ContentLine
     cal = Calendar()
-    # Proper X-WR-CALNAME content line
     cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
+
     created = 0
 
     for _, r in subset.iterrows():
@@ -146,7 +147,6 @@ for cal_name in cal_order:
 
         start_dt = None
         end_dt = None
-
         if col_start:
             start_dt = parse_dt(r.get(col_start))
         elif col_start_d:
@@ -160,7 +160,6 @@ for cal_name in cal_order:
         if start_dt is None and end_dt is None:
             continue
 
-        # All-day detection
         allday_flag = False
         if col_allday:
             v = str(r.get(col_allday)).strip().lower()
@@ -206,22 +205,20 @@ for cal_name in cal_order:
         created += 1
         total_events += 1
 
-    # Write ICS
     slug = slugify(cal_name)
     rel_ics = f"/calendars/{slug}.ics"
     if rel_ics.endswith("}"):
         rel_ics = rel_ics[:-1]
     ics_path = os.path.join(OUT_DIR, rel_ics.lstrip("/"))
 
+    per_calendar_debug.append((cal_name, created))
     with open(ics_path, "w", encoding="utf-8") as f:
         f.writelines(cal.serialize_iter())
 
     manifest.append({"name": cal_name, "slug": slug, "ics": rel_ics})
     counts[cal_name] = created
-    per_calendar_debug.append((cal_name, created))
     print(f"✅ Wrote {ics_path} ({created} events)")
 
-# Diagnostics
 print("—— Summary ——")
 print(f"Calendars found: {len(per_calendar_debug)}")
 for name, cnt in per_calendar_debug:
@@ -232,21 +229,10 @@ if total_events == 0:
     print("❌ No events were generated. Please verify your sheet.")
     raise SystemExit(1)
 
-# ------------------ Write manifest ----------
 with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-# ------------------ Landing page ------------
-# Palette from your spec:
-# Apple – #f5f5f7 (text #000000)
-# Google – #ea4335 (text #ffffff)
-# Outlook – #0078d4 (text #ffffff)
-# Background – #f6f4e8
-# Card – #881228
-# Chevron – #000000
-# Dropdown text – #000000
-# Title text – #ffffff
-# Sub headline – #F5F5F5
+# ------------------ Landing page (updated colors + layout) ------------
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -255,109 +241,107 @@ index_html = r"""<!doctype html>
 <title>Subscribe to Calendars</title>
 <style>
 :root{
-  --bg: #f6f4e8;
-  --card: #881228;
+  /* Palette (your choices) */
+  --bg: #f6f4e8;            /* page background */
+  --card: #881228;          /* card background */
+  --title: #ffffff;         /* title text */
+  --sub: #f5f5f5;           /* subheadline text */
 
-  --title-text: #ffffff;
-  --subhead-text: #F5F5F5;
+  --apple-bg: #f5f5f7;      /* Apple */
+  --apple-text: #000000;
 
-  --dropdown-bg: #ffffff;
-  --dropdown-text: #000000;
-  --dropdown-border: #e0e0e0;
+  --google-bg: #ea4335;     /* Google */
+  --google-text: #ffffff;
 
-  --chevron: #000000;
+  --outlook-bg: #0078d4;    /* Outlook (both) */
+  --outlook-text: #ffffff;
 
-  --btn-apple-bg: #f5f5f7;
-  --btn-apple-text: #000000;
-
-  --btn-google-bg: #ea4335;
-  --btn-google-text: #ffffff;
-
-  --btn-ol-bg: #0078d4;
-  --btn-ol-text: #ffffff;
-
-  --copy-bg: #ffffff;
+  --copy-bg: #ffffff;       /* Copy link */
   --copy-text: #000000;
 
-  --shadow: 0 18px 50px rgba(0,0,0,.22);
-  --radius: 18px;
+  --dropdown-bg: #ffffff;   /* dropdown */
+  --dropdown-text: #000000;
+  --chevron: #000000;
 
-  --row-gap: 14px;
-  --control-h: 48px; /* dropdown & Copy link same height */
+  --border: #1f3b7a;        /* subtle blue border like screenshot */
 }
 
+/* Base */
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{
-  background:var(--bg);
-  color:var(--title-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-}
-.container{max-width:1100px;margin:36px auto;padding:0 22px}
+body{margin:0;background:var(--bg);color:var(--title);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
+.container{max-width:1200px;margin:48px auto;padding:0 20px}
 .card{
   background:var(--card);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  padding:26px;
-}
-h1{
-  margin:0 0 6px;
-  font-size:clamp(24px, 4.2vw, 38px);
-  line-height:1.15;
-  color:var(--title-text);
-}
-p.lead{
-  margin:0 0 18px;
-  color:var(--subhead-text);
-  font-size:clamp(14px, 2.4vw, 18px);
+  border-radius:28px;
+  padding:36px;
+  box-shadow:0 18px 60px rgba(0,0,0,.25);
 }
 
-.row{display:flex;flex-wrap:wrap;gap:12px;margin:var(--row-gap) 0}
+/* Headings */
+h1{margin:0 0 6px;font-size:56px;line-height:1.05;font-weight:800;color:var(--title)}
+p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
 
-/* Controls row: dropdown (left) + copy button */
-.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+/* GRID: 2 columns so select aligns with Apple+Google width, copy aligns with Outlook block */
+.grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+  align-items:center;
+  margin-top:14px;
+}
 
-/* Select (dropdown) with custom chevron, flush-left with buttons */
+/* Dropdown */
 select{
-  appearance:none;-webkit-appearance:none;-moz-appearance:none;
-  background: var(--dropdown-bg);
-  color: var(--dropdown-text);
-  border:1px solid var(--dropdown-border);
-  border-radius:12px;
-  padding: 10px 44px 10px 12px; /* right padding for chevron */
-  min-height: var(--control-h);
-  line-height: calc(var(--control-h) - 22px);
-  font-size:16px;
-  min-width: min(520px, 80vw);
-
-  /* Chevron SVG (black), slightly inset from right */
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%23000000' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-size: 16px 16px;
-  background-position: right 18px center;
+  width:100%;
+  font-size:18px;
+  padding:14px 54px 14px 16px; /* room for chevron */
+  border-radius:16px;
+  background:var(--dropdown-bg);
+  color:var(--dropdown-text);
+  border:3px solid var(--border);
+  outline:none;
+  appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='22' height='22' fill='%23000000'><path d='M7 10l5 5 5-5'/></svg>");
+  background-repeat:no-repeat;
+  background-position: right 22px center; /* chevron slightly indented */
+  background-size:22px;
 }
 
-/* Buttons */
+/* Copy link button (matches dropdown height) */
+#copyBtn{
+  height:100%;
+  min-height:54px;
+  font-size:18px;
+  border-radius:16px;
+  padding:14px 20px;
+  border:0;
+  background:var(--copy-bg);
+  color:var(--copy-text);
+  font-weight:800;
+  cursor:pointer;
+  box-shadow:0 2px 0 rgba(0,0,0,.25);
+}
+
+/* Button groups on second row */
+.btn-group{display:flex;gap:12px;align-items:center}
+.left{grid-column:1}
+.right{grid-column:2}
+
+/* Brand buttons */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
-  padding:10px 16px;
-  border-radius:12px;
-  border:none;
-  cursor:pointer;
-  font-weight:600;
-  font-size:16px;
-  min-height: var(--control-h);
-  transition:transform .12s ease, filter .15s ease;
+  padding:16px 22px;border-radius:16px;border:none;cursor:pointer;
+  font-size:22px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.2);
 }
-.btn:hover{transform:translateY(-1px)}
-.btn:active{transform:translateY(0)}
+.apple{background:var(--apple-bg);color:var(--apple-text)}
+.google{background:var(--google-bg);color:var(--google-text)}
+.outlook{background:var(--outlook-bg);color:var(--outlook-text)}
 
-.btn-apple{background:var(--btn-apple-bg);color:var(--btn-apple-text)}
-.btn-google{background:var(--btn-google-bg);color:var(--btn-google-text)}
-.btn-ol{background:var(--btn-ol-bg);color:var(--btn-ol-text)}
-.btn-copy{background:var(--copy-bg);color:var(--copy-text);border:1px solid var(--dropdown-border)}
-
-.footer{margin-top:10px;color:var(--subhead-text);font-size:13px}
+/* Responsive */
+@media (max-width: 900px){
+  .grid{grid-template-columns: 1fr;gap:12px}
+  .left,.right{grid-column:1}
+}
 </style>
 </head>
 <body>
@@ -366,16 +350,20 @@ select{
       <h1>Subscribe to Calendars</h1>
       <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
 
-      <div class="controls">
+      <div class="grid">
+        <!-- Row 1 -->
         <select id="calSel" aria-label="Choose calendar"></select>
-        <button id="copyBtn" class="btn btn-copy">Copy link</button>
-      </div>
+        <button id="copyBtn">Copy link</button>
 
-      <div class="row">
-        <button id="appleBtn"  class="btn btn-apple">Apple Calendar</button>
-        <button id="googleBtn" class="btn btn-google">Google Calendar</button>
-        <button id="olLiveBtn" class="btn btn-ol">Outlook (personal)</button>
-        <button id="olWorkBtn" class="btn btn-ol">Outlook (work/school)</button>
+        <!-- Row 2 -->
+        <div class="btn-group left">
+          <button id="appleBtn" class="btn apple">Apple Calendar</button>
+          <button id="googleBtn" class="btn google">Google Calendar</button>
+        </div>
+        <div class="btn-group right">
+          <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
+          <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
+        </div>
       </div>
     </div>
   </div>
@@ -401,18 +389,28 @@ select{
     const slug = sel.value;
     return absUrl('calendars/' + slug + '.ics');
   }
+
   function setButtons(){
     const ics = currentIcsUrl();
-    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
     const enc = encodeURIComponent(ics);
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+
     // Apple (webcal)
-    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
-    // Google: jump straight to "Add by URL"
-    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
+    appleBtn.onclick = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
+
+    // Google: deep link to "Add by URL"
+    googleBtn.onclick = () => {
+      const u = 'https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc;
+      window.open(u, '_blank');
+    };
+
     // Outlook (personal)
-    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    olLiveBtn.onclick = () =>
+      window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+
     // Outlook (work/school)
-    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    olWorkBtn.onclick = () =>
+      window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
   }
 
   try{
@@ -427,17 +425,17 @@ select{
     sel.addEventListener('change', setButtons);
     setButtons();
   }catch(e){
-    // leave empty if manifest missing
+    sel.innerHTML = '<option>Failed to load calendars</option>';
   }
 
   copyBtn.onclick = async () => {
-    const link = currentIcsUrl();
     try{
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(currentIcsUrl());
+      const old = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
-      setTimeout(() => copyBtn.textContent = 'Copy link', 1200);
-    }catch{
-      alert('Copy failed. Link:\\n' + link);
+      setTimeout(() => copyBtn.textContent = old, 1100);
+    }catch(e){
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
     }
   };
 })();
