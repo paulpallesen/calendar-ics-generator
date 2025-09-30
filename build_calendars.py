@@ -332,7 +332,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 .select-wrap:after{
   content:"";
   position:absolute;
-  right:12px;              /* slightly inset */
+  right:20px;              /* slightly inset */
   top:50%;
   width:10px; height:10px; /* smaller chevron */
   transform:translateY(-50%) rotate(45deg);
