@@ -247,7 +247,6 @@ with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 # ------------------ Landing page ------------
-
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -298,7 +297,8 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   border-radius:14px;
   background:#fff;
   box-shadow:0 1px 0 rgba(0,0,0,.12), 0 6px 18px rgba(0,0,0,.18);
-  padding:0 56px 0 18px;  /* leave space for chevron */
+  padding:0 18px;          /* even padding; select will add right padding for chevron */
+  overflow:hidden;         /* ensures select stays within */
 }
 #calSel{
   appearance:none;
@@ -308,24 +308,29 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   color:var(--dropdown-text);
   background:transparent;
   height:100%;
-  min-width:140px;     /* safety minimum */
+  width:100%;              /* fill wrapper so the whole area is clickable */
+  display:block;
+  padding-right:44px;      /* reserve room for chevron */
+  cursor:pointer;
 }
 .select-wrap:after{
   content:"";
   position:absolute;
-  right:16px;
+  right:14px;
   top:50%;
   width:12px; height:12px;
   transform:translateY(-50%) rotate(45deg);
   border-right:3px solid var(--chev);
   border-bottom:3px solid var(--chev);
   opacity:.9;
+  pointer-events:none;     /* chevron never blocks clicks */
 }
 
-/* Copy button — same height as dropdown */
+/* Copy button — same height as dropdown, fixed width 96px */
 #copyBtn{
   height:var(--control-h);
-  padding:0 18px;
+  width:96px;
+  padding:0 12px;
   border:none;
   border-radius:14px;
   background:var(--copy-bg);
@@ -337,10 +342,21 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 }
 
 /* Brand buttons row */
-.btn{border:none;border-radius:14px;cursor:pointer;padding:12px 20px;font-size:20px;font-weight:700}
+.btn{border:none;border-radius:14px;cursor:pointer;padding:12px 20px;font-size:20px;font-weight:700;transition:.15s transform ease,.2s filter}
 .apple{background:var(--apple-bg);color:var(--apple-text)}
 .google{background:var(--google-bg);color:var(--google-text)}
 .outlook{background:var(--outlook-bg);color:var(--outlook-text)}
+
+/* ---- Hovers ---- */
+.btn:hover{
+  transform:translateY(-1px);
+  filter:brightness(1.05);
+}
+.apple:hover{ box-shadow:0 2px 0 rgba(0,0,0,.10), 0 10px 22px rgba(0,0,0,.18) }
+.google:hover{ background:#d93c2f }
+.outlook:hover{ background:#0069bd }
+#copyBtn:hover{ box-shadow:0 2px 0 rgba(0,0,0,.10), 0 10px 22px rgba(0,0,0,.18) }
+.select-wrap:hover{ box-shadow:0 2px 0 rgba(0,0,0,.12), 0 10px 24px rgba(0,0,0,.22) }
 
 /* Simple responsive tuck */
 @media (max-width:760px){
@@ -362,7 +378,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
         <div class="select-wrap" id="selectWrap">
           <select id="calSel" aria-label="Choose calendar"></select>
         </div>
-        <button id="copyBtn">Copy link</button>
+        <button id="copyBtn">Copy</button>
       </div>
 
       <!-- Brand buttons row -->
@@ -439,8 +455,19 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
     const width = apple.offsetWidth + gap + google.offsetWidth;
 
     wrap.style.width = width + 'px';          // dropdown width
-    // height is already tied via CSS var --control-h
   }
+
+  // Make wrapper click also open the native picker (mobile-friendly)
+  (function(){
+    const wrap = document.getElementById('selectWrap');
+    const sel  = document.getElementById('calSel');
+    if (wrap && sel) {
+      wrap.addEventListener('click', () => {
+        if (typeof sel.showPicker === 'function') sel.showPicker();
+        else sel.focus();
+      });
+    }
+  })();
 
   // Populate dropdown from manifest, then size + wire
   try{
@@ -467,6 +494,8 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 </html>
 """
 
+with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
     f.write(index_html)
