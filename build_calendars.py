@@ -320,7 +320,7 @@ button:hover{transform:translateY(-1px)}
 /* Dropdown styling (keep original layout; only palette + chevron) */
 select{
   background-color:var(--bg);
-  color:var(--text);
+  color:var(--copy-text);
   border:1px solid var(--border);
   min-width:260px;
   appearance:none;-webkit-appearance:none;-moz-appearance:none;
