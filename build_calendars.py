@@ -309,23 +309,25 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
   color:var(--dropdown-text);
   background:transparent;
   height:100%;
-  width:100%;              /* fill wrapper so the whole area is clickable */
+  width:100%;              /* fill wrapper so whole area is clickable */
   display:block;
-  padding-right:44px;      /* reserve room for chevron */
+  padding-right:32px;      /* was 44px, reduced since chevron is smaller/closer */
   cursor:pointer;
 }
+
 .select-wrap:after{
   content:"";
   position:absolute;
-  right:14px;
+  right:10px;              /* was 14px, nudged left */
   top:50%;
-  width:12px; height:12px;
+  width:10px; height:10px; /* was 12x12, smaller chevron */
   transform:translateY(-50%) rotate(45deg);
-  border-right:3px solid var(--chev);
-  border-bottom:3px solid var(--chev);
+  border-right:2px solid var(--chev);  /* thinner stroke */
+  border-bottom:2px solid var(--chev);
   opacity:.9;
   pointer-events:none;     /* chevron never blocks clicks */
 }
+
 
 /* Copy button — same height as dropdown, fixed width 96px */
 #copyBtn{
