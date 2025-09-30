@@ -232,7 +232,7 @@ if total_events == 0:
 with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-# ------------------ Landing page (updated colors + layout) ------------
+# ------------------ Landing page (palette + exact widths) ------------
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -241,32 +241,23 @@ index_html = r"""<!doctype html>
 <title>Subscribe to Calendars</title>
 <style>
 :root{
-  /* Palette (your choices) */
-  --bg: #f6f4e8;            /* page background */
-  --card: #881228;          /* card background */
-  --title: #ffffff;         /* title text */
-  --sub: #f5f5f5;           /* subheadline text */
+  --bg:#f6f4e8;
+  --card:#881228;
+  --title:#ffffff;
+  --sub:#f5f5f5;
 
-  --apple-bg: #f5f5f7;      /* Apple */
-  --apple-text: #000000;
+  --apple-bg:#f5f5f7; --apple-text:#000000;
+  --google-bg:#ea4335; --google-text:#ffffff;
+  --outlook-bg:#0078d4; --outlook-text:#ffffff;
 
-  --google-bg: #ea4335;     /* Google */
-  --google-text: #ffffff;
+  --copy-bg:#ffffff; --copy-text:#000000;
 
-  --outlook-bg: #0078d4;    /* Outlook (both) */
-  --outlook-text: #ffffff;
+  --dropdown-bg:#ffffff; --dropdown-text:#000000; --chevron:#000000;
 
-  --copy-bg: #ffffff;       /* Copy link */
-  --copy-text: #000000;
-
-  --dropdown-bg: #ffffff;   /* dropdown */
-  --dropdown-text: #000000;
-  --chevron: #000000;
-
-  --border: #1f3b7a;        /* subtle blue border like screenshot */
+  --border:#1f3b7a;
+  --gap:12px; /* same spacing used between buttons */
 }
 
-/* Base */
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--title);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
 .container{max-width:1200px;margin:48px auto;padding:0 20px}
@@ -277,22 +268,23 @@ body{margin:0;background:var(--bg);color:var(--title);font-family:system-ui,-app
   box-shadow:0 18px 60px rgba(0,0,0,.25);
 }
 
-/* Headings */
 h1{margin:0 0 6px;font-size:56px;line-height:1.05;font-weight:800;color:var(--title)}
 p.lead{margin:0 0 18px;font-size:24px;color:var(--sub)}
 
-/* GRID: 2 columns so select aligns with Apple+Google width, copy aligns with Outlook block */
+/* 2-column grid: left column = dropdown + left buttons; right column = copy + right buttons */
 .grid{
   display:grid;
   grid-template-columns: 1fr 1fr;
-  gap:12px;
+  gap:var(--gap);
   align-items:center;
   margin-top:14px;
 }
 
-/* Dropdown */
-select{
-  width:100%;
+/* Wrap the select so we can set its width precisely via JS */
+.selWrap{grid-column:1}
+#calSel{
+  display:block;
+  width:auto; /* JS will set exact px width to match Apple+gap+Google */
   font-size:18px;
   padding:14px 54px 14px 16px; /* room for chevron */
   border-radius:16px;
@@ -303,12 +295,14 @@ select{
   appearance:none;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='22' height='22' fill='%23000000'><path d='M7 10l5 5 5-5'/></svg>");
   background-repeat:no-repeat;
-  background-position: right 22px center; /* chevron slightly indented */
+  background-position:right 22px center; /* chevron slight indent from far right */
   background-size:22px;
+  min-height:54px;
 }
 
-/* Copy link button (matches dropdown height) */
+/* Copy link aligns to right column (same start as Outlook personal) */
 #copyBtn{
+  grid-column:2;
   height:100%;
   min-height:54px;
   font-size:18px;
@@ -322,8 +316,8 @@ select{
   box-shadow:0 2px 0 rgba(0,0,0,.25);
 }
 
-/* Button groups on second row */
-.btn-group{display:flex;gap:12px;align-items:center}
+/* Second row: two button groups */
+.btn-group{display:flex;gap:var(--gap);align-items:center}
 .left{grid-column:1}
 .right{grid-column:2}
 
@@ -337,9 +331,12 @@ select{
 .google{background:var(--google-bg);color:var(--google-text)}
 .outlook{background:var(--outlook-bg);color:var(--outlook-text)}
 
-/* Responsive */
+/* Responsive: stack and let select be full-width */
 @media (max-width: 900px){
-  .grid{grid-template-columns: 1fr;gap:12px}
+  .grid{grid-template-columns: 1fr;gap:var(--gap)}
+  .selWrap{grid-column:1}
+  #calSel{width:100%}
+  #copyBtn{grid-column:1}
   .left,.right{grid-column:1}
 }
 </style>
@@ -352,15 +349,17 @@ select{
 
       <div class="grid">
         <!-- Row 1 -->
-        <select id="calSel" aria-label="Choose calendar"></select>
+        <div class="selWrap">
+          <select id="calSel" aria-label="Choose calendar"></select>
+        </div>
         <button id="copyBtn">Copy link</button>
 
         <!-- Row 2 -->
-        <div class="btn-group left">
+        <div id="leftGroup" class="btn-group left">
           <button id="appleBtn" class="btn apple">Apple Calendar</button>
           <button id="googleBtn" class="btn google">Google Calendar</button>
         </div>
-        <div class="btn-group right">
+        <div id="rightGroup" class="btn-group right">
           <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
           <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
         </div>
@@ -371,11 +370,14 @@ select{
 <script>
 (async function(){
   const sel = document.getElementById('calSel');
+  const selWrap = document.querySelector('.selWrap');
   const copyBtn = document.getElementById('copyBtn');
   const appleBtn = document.getElementById('appleBtn');
   const googleBtn = document.getElementById('googleBtn');
   const olLiveBtn = document.getElementById('olLiveBtn');
   const olWorkBtn = document.getElementById('olWorkBtn');
+  const leftGroup = document.getElementById('leftGroup');
+  const rightGroup = document.getElementById('rightGroup');
 
   async function loadManifest(){
     const url = new URL('calendars.json', location.href).href;
@@ -413,6 +415,22 @@ select{
       window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
   }
 
+  // Make the dropdown width match EXACTLY Apple + gap + Google (i.e., the left group width)
+  function syncWidths(){
+    // On small screens we let CSS make it 100%
+    if (window.matchMedia('(max-width: 900px)').matches){
+      sel.style.width = '100%';
+      return;
+    }
+    // Force measurement after layout
+    requestAnimationFrame(() => {
+      const leftWidth = leftGroup.getBoundingClientRect().width;
+      if (leftWidth > 0){
+        sel.style.width = Math.round(leftWidth) + 'px';
+      }
+    });
+  }
+
   try{
     const calendars = await loadManifest();
     sel.innerHTML = '';
@@ -428,7 +446,13 @@ select{
     sel.innerHTML = '<option>Failed to load calendars</option>';
   }
 
-  copyBtn.onclick = async () => {
+  // When fonts load / window resizes, re-measure to keep exact match
+  window.addEventListener('load', syncWidths);
+  window.addEventListener('resize', syncWidths);
+  // Also sync after a tick so buttons finish sizing
+  setTimeout(syncWidths, 0);
+
+  copyBtn.addEventListener('click', async () => {
     try{
       await navigator.clipboard.writeText(currentIcsUrl());
       const old = copyBtn.textContent;
@@ -437,7 +461,7 @@ select{
     }catch(e){
       alert('Copy failed. Link:\\n' + currentIcsUrl());
     }
-  };
+  });
 })();
 </script>
 </body>
