@@ -278,7 +278,7 @@ index_html = r"""<!doctype html>
   --muted: #f5f5f5;      /* subheadline */
 
   /* Brands */
-  --apple-bg:   #979797; --apple-text:   #000000;
+  --apple-bg:   #979797; --apple-text:   #ffffff;
   --google-bg:  #ea4335; --google-text:  #ffffff;
   --outlook-bg: #0078d4; --outlook-text: #ffffff;
 
@@ -332,7 +332,7 @@ p.lead{margin:0 0 18px;color:var(--muted);font-size:18px;line-height:1.45}
 .select-wrap:after{
   content:"";
   position:absolute;
-  right:4px;              /* slightly inset */
+  right:0px;              /* slightly inset */
   top:50%;
   width:10px; height:10px; /* smaller chevron */
   transform:translateY(-50%) rotate(45deg);
