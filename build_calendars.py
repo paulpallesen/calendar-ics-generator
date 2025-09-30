@@ -1,5 +1,26 @@
 # build_calendars.py
 # Google Sheet (CSV_URL secret) -> public/calendars/<slug>.ics + calendars.json + index.html
+#
+# 🎨 COLOR LEGEND (defined in :root CSS variables below)
+# --bg          (#0b0f1a)  : Page background
+# --card        (#121826)  : Card background
+# --text        (#e6eaf2)  : Primary text (dropdown + chevron inherit this)
+# --muted       (#bfc8d5)  : Muted/subtext
+#
+# --apple-bg    (#ffffff)  : Apple button background
+# --apple-text  (#000000)  : Apple button text
+# --google-bg   (#1A73E8)  : Google button background
+# --google-text (#ffffff)  : Google button text
+# --outlook-bg  (#0078D4)  : Outlook button background
+# --outlook-text(#ffffff)  : Outlook button text
+#
+# --copy-bg     (#ffffff)  : Copy link button background
+# --copy-text   (#000000)  : Copy link button text
+# --badge-bg    (#ffffff)  : Badge background
+# --badge-text  (#000000)  : Badge text
+#
+# --accent      (#2dd4bf)  : Accent teal
+# --border      (#2a3347)  : Dropdown border
 
 import os
 import re
@@ -13,8 +34,8 @@ from ics import Calendar, Event
 from ics.grammar.parse import ContentLine
 
 # ------------------ Config ------------------
-DAYFIRST = True  # interpret dates as DD/MM/YYYY
-DEFAULT_TIMED_DURATION_HOURS = 1  # fallback if end missing/invalid
+DAYFIRST = True
+DEFAULT_TIMED_DURATION_HOURS = 1
 OUT_DIR = "public"
 ICS_DIR = os.path.join(OUT_DIR, "calendars")
 MANIFEST_PATH = os.path.join(OUT_DIR, "calendars.json")
@@ -47,18 +68,13 @@ def parse_dt(v):
     return dt
 
 def is_midnight(dt) -> bool:
-    return dt is not None and (
-        getattr(dt, "hour", 0),
-        getattr(dt, "minute", 0),
-        getattr(dt, "second", 0),
-    ) == (0, 0, 0)
+    return dt is not None and (getattr(dt, "hour", 0), getattr(dt, "minute", 0), getattr(dt, "second", 0)) == (0, 0, 0)
 
 def make_uid(title, start, end, extra=""):
     s = f"{title}|{start}|{end}|{extra}"
     return md5(s.encode("utf-8")).hexdigest() + "@dynamic-cal"
 
 def first_col(df, names):
-    """Return the first matching column name from a list of candidates, else None."""
     cols = {c.strip().lower(): c for c in df.columns}
     for n in names:
         key = n.strip().lower()
@@ -67,18 +83,15 @@ def first_col(df, names):
     return None
 
 def combine_date_time(date_val, time_val):
-    """Combine separate date and time cells into a single Timestamp (or just date if no time)."""
     d = parse_dt(date_val)
     if d is None:
         return None
     if time_val is None or (isinstance(time_val, float) and pd.isna(time_val)) or str(time_val).strip() == "":
-        return d.normalize()  # midnight
+        return d.normalize()
     t = pd.to_datetime(str(time_val), errors="coerce", dayfirst=DAYFIRST)
     if pd.isna(t):
         return d.normalize()
-    return pd.Timestamp(
-        year=d.year, month=d.month, day=d.day, hour=t.hour, minute=t.minute, second=t.second
-    )
+    return pd.Timestamp(year=d.year, month=d.month, day=d.day, hour=t.hour, minute=t.minute, second=t.second)
 
 # ------------------ Load CSV ----------------
 print(f"📥 Downloading CSV from {CSV_URL}")
@@ -89,7 +102,6 @@ df = pd.read_csv(StringIO(resp.text))
 print(f"ℹ️ Loaded {len(df)} rows from sheet.")
 print("ℹ️ Columns from sheet:", list(df.columns))
 
-# Flexible header resolution
 col_calendar = first_col(df, ["Calendar", "Calendar Name", "Feed"])
 col_title    = first_col(df, ["Title", "Event", "Name"])
 col_start    = first_col(df, ["Start"])
@@ -105,145 +117,79 @@ col_uid      = first_col(df, ["UID", "Uid"])
 col_allday   = first_col(df, ["All Day", "All-day", "AllDay"])
 col_transp   = first_col(df, ["Transparent"])
 
-missing_keys = []
-if not col_calendar: missing_keys.append("Calendar")
-if not col_title:    missing_keys.append("Title/Event/Name")
-if not (col_start or col_start_d):
-    missing_keys.append("Start OR (Start Date + optional Start Time)")
-if missing_keys:
-    raise SystemExit("❌ Required columns missing: " + ", ".join(missing_keys))
+if not col_calendar or not col_title or not (col_start or col_start_d):
+    raise SystemExit("❌ Required columns missing.")
 
-# Clean common string columns
 for c in [col_calendar, col_title, col_loc, col_desc, col_url, col_uid]:
     if c:
         df[c] = df[c].apply(clean_str)
 
-# Prepare output
 os.makedirs(ICS_DIR, exist_ok=True)
-manifest = []
-counts = {}
-cal_order = list(dict.fromkeys(df[col_calendar].tolist()))
+manifest, counts, per_calendar_debug = [], {}, []
 total_events = 0
-per_calendar_debug = []
 
-for cal_name in cal_order:
-    if not cal_name:
-        continue
+for cal_name in dict.fromkeys(df[col_calendar].tolist()):
+    if not cal_name: continue
     subset = df[df[col_calendar] == cal_name]
-    if subset.empty:
-        continue
+    if subset.empty: continue
 
     cal = Calendar()
-    # Proper header line for calendar name
     cal.extra.append(ContentLine(name="X-WR-CALNAME", params={}, value=cal_name))
-
     created = 0
 
     for _, r in subset.iterrows():
         title = clean_str(r.get(col_title))
-        if not title:
-            continue
+        if not title: continue
 
-        # Build start/end timestamps from either combined or split columns
-        start_dt = None
-        end_dt = None
+        start_dt = parse_dt(r.get(col_start)) if col_start else combine_date_time(r.get(col_start_d), r.get(col_start_t))
+        end_dt   = parse_dt(r.get(col_end)) if col_end else combine_date_time(r.get(col_end_d), r.get(col_end_t))
 
-        if col_start:
-            start_dt = parse_dt(r.get(col_start))
-        elif col_start_d:
-            start_dt = combine_date_time(r.get(col_start_d), r.get(col_start_t))
+        if start_dt is None and end_dt is None: continue
 
-        if col_end:
-            end_dt = parse_dt(r.get(col_end))
-        elif col_end_d:
-            end_dt = combine_date_time(r.get(col_end_d), r.get(col_end_t))
-
-        if start_dt is None and end_dt is None:
-            continue
-
-        # Determine all-day
         allday_flag = False
         if col_allday:
             v = str(r.get(col_allday)).strip().lower()
-            allday_flag = v in ("true", "1", "yes", "y")
+            allday_flag = v in ("true","1","yes","y")
 
-        # If both times are blank or midnight and not explicitly timed, treat as all-day
-        if not allday_flag:
-            if (start_dt is not None and is_midnight(start_dt)) and (end_dt is None or is_midnight(end_dt)):
-                allday_flag = True
+        if not allday_flag and start_dt is not None and is_midnight(start_dt) and (end_dt is None or is_midnight(end_dt)):
+            allday_flag = True
 
         ev = Event()
         ev.name = title
 
         if allday_flag:
-            # All-day: use date parts and ensure DTEND > DTSTART (non-inclusive)
-            if start_dt is None and end_dt is not None:
-                start_dt = end_dt
-            ev.begin = start_dt.date()
-            ev.make_all_day()
-            if end_dt is None or end_dt.date() <= start_dt.date():
-                ev.end = (start_dt + pd.Timedelta(days=1)).date()
-            else:
-                ev.end = end_dt.date()
+            if start_dt is None and end_dt is not None: start_dt = end_dt
+            ev.begin = start_dt.date(); ev.make_all_day()
+            ev.end = (end_dt.date() if end_dt and end_dt.date() > start_dt.date() else (start_dt + pd.Timedelta(days=1)).date())
         else:
-            # Timed: ensure End > Start
-            if start_dt is None and end_dt is not None:
-                start_dt = end_dt - pd.Timedelta(hours=DEFAULT_TIMED_DURATION_HOURS)
-            if end_dt is None or end_dt <= start_dt:
-                end_dt = start_dt + pd.Timedelta(hours=DEFAULT_TIMED_DURATION_HOURS)
-            ev.begin = start_dt
-            ev.end = end_dt
+            if start_dt is None and end_dt is not None: start_dt = end_dt - pd.Timedelta(hours=DEFAULT_TIMED_DURATION_HOURS)
+            if end_dt is None or end_dt <= start_dt: end_dt = start_dt + pd.Timedelta(hours=DEFAULT_TIMED_DURATION_HOURS)
+            ev.begin, ev.end = start_dt, end_dt
 
-        # Optional fields
-        if col_loc:
-            ev.location = clean_str(r.get(col_loc)) or None
-        if col_desc:
-            ev.description = clean_str(r.get(col_desc)) or None
-        if col_url:
-            ev.url = clean_str(r.get(col_url)) or None
+        if col_loc:  ev.location    = clean_str(r.get(col_loc)) or None
+        if col_desc: ev.description = clean_str(r.get(col_desc)) or None
+        if col_url:  ev.url         = clean_str(r.get(col_url)) or None
+        ev.uid = clean_str(r.get(col_uid)) or make_uid(title, start_dt, end_dt, ev.location or "")
 
-        uid = clean_str(r.get(col_uid)) if col_uid else ""
-        ev.uid = uid or make_uid(title, start_dt, end_dt, ev.location or "")
-
-        # Transparent flag (TRUE = free, FALSE/blank = busy)
         if col_transp:
             v = str(r.get(col_transp)).strip().lower()
-            ev.transparent = v in ("true", "1", "yes", "y")
+            ev.transparent = v in ("true","1","yes","y")
 
-        cal.events.add(ev)
-        created += 1
-        total_events += 1
+        cal.events.add(ev); created += 1; total_events += 1
 
-    # Write ICS if any events for this calendar
     slug = slugify(cal_name)
     rel_ics = f"/calendars/{slug}.ics"
-    if rel_ics.endswith("}"):
-        rel_ics = rel_ics[:-1]
     ics_path = os.path.join(OUT_DIR, rel_ics.lstrip("/"))
-
-    per_calendar_debug.append((cal_name, created))
-
-    with open(ics_path, "w", encoding="utf-8") as f:
-        f.writelines(cal.serialize_iter())
-
+    with open(ics_path, "w", encoding="utf-8") as f: f.writelines(cal.serialize_iter())
     manifest.append({"name": cal_name, "slug": slug, "ics": rel_ics})
     counts[cal_name] = created
     print(f"✅ Wrote {ics_path} ({created} events)")
 
-# Diagnostics summary
-print("—— Summary ——")
-print(f"Calendars found: {len(per_calendar_debug)}")
-for name, cnt in per_calendar_debug:
-    print(f"  • {name}: {cnt} events")
-print(f"Total events across all calendars: {total_events}")
-if total_events == 0:
-    raise SystemExit("❌ No events generated.")
+print("—— Summary ——"); print(f"Total events: {total_events}")
 
-# ------------------ Write manifest ----------
-with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
-    json.dump(manifest, f, ensure_ascii=False, indent=2)
+with open(MANIFEST_PATH, "w", encoding="utf-8") as f: json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-# ------------------ Landing page (palette + layout) ------------
+# ------------------ Landing page ------------
 index_html = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -251,111 +197,54 @@ index_html = r"""<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Subscribe to Calendars</title>
 <style>
-:root{
-  /* Palette (centralized) */
-  --bg:#f6f4e9;            /* page background */
-  --card:#881328;          /* card background */
-  --text:#ffffff;          /* main text */
-  --muted:#f5f5f5;         /* sub text */
-
-  --apple-bg:#f5f5f7;      /* apple btn bg */
-  --apple-text:#000000;    /* apple btn text */
-  --google-bg:#ea4335;     /* google btn bg */
-  --google-text:#ffffff;   /* google btn text */
-  --outlook-bg:#0A74DA;    /* outlook btn bg */
-  --outlook-text:#ffffff;  /* outlook btn text */
-
-  --copy-bg:#ffffff;       /* copy-link bg */
-  --copy-text:#000000;     /* copy-link text */
-
-  --badge-bg:#ffffff;      /* count badge bg */
-  --badge-text:#000000;    /* count badge text */
-
-  --accent:#2dd4bf;        /* accent */
-  --border:#223044;        /* borders */
+:root {
+  --bg:#0b0f1a; --card:#121826; --text:#e6eaf2; --muted:#bfc8d5;
+  --apple-bg:#ffffff; --apple-text:#000000;
+  --google-bg:#1A73E8; --google-text:#ffffff;
+  --outlook-bg:#0078D4; --outlook-text:#ffffff;
+  --copy-bg:#ffffff; --copy-text:#000000;
+  --badge-bg:#ffffff; --badge-text:#000000;
+  --accent:#2dd4bf; --border:#2a3347;
 }
 
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;
-  background:var(--bg);
-  color:var(--text);
+select {
+  color: var(--text);
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 16px;
 }
+
+body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
 .container{max-width:900px;margin:40px auto;padding:24px}
-.card{
-  background:var(--card);
-  border-radius:16px;
-  box-shadow:0 10px 30px rgba(0,0,0,.35);
-  padding:24px
-}
+.card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:24px}
 h1{margin:0 0 8px;font-size:28px}
 p.lead{margin:0 0 20px;color:var(--muted)}
-.badge{
-  display:inline-block;
-  background:var(--badge-bg);
-  color:var(--badge-text);
-  padding:6px 10px;
-  border-radius:999px;
-  font-size:12px;
-  margin-left:8px
-}
-
 .row{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
-.row.controls{align-items:stretch} /* ensure equal heights */
-
-button,select{font-size:16px;border-radius:12px;border:1px solid var(--border)}
-button{
-  cursor:pointer;
-  transition:.15s transform ease,.2s opacity
-}
-button:hover{transform:translateY(-1px)}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px}
-
+button{cursor:pointer;transition:.15s transform ease,.2s opacity;padding:10px 14px;font-size:16px;border-radius:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;border:none}
 .apple{background:var(--apple-bg);color:var(--apple-text)}
 .google{background:var(--google-bg);color:var(--google-text)}
 .outlook{background:var(--outlook-bg);color:var(--outlook-text)}
-.copy{background:var(--copy-bg);color:var(--copy-text);font-weight:600}
-
-/* Dropdown styling (keep original layout; only palette + chevron) */
-select{
-  background-color:var(--bg);
-  color:var(--copy-text);
-  border:1px solid var(--border);
-  min-width:260px;
-  appearance:none;-webkit-appearance:none;-moz-appearance:none;
-  padding:10px 14px;
-  padding-right:48px;
-  background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 6 5-6' stroke='%23cdd8e8' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;
-  background-position:right 1.25rem center; /* nudged slightly right */
-  background-size:12px 8px;
-}
-
-/* Make Copy link match dropdown height */
-.copy{padding:10px 14px}
-
-/* Button row keeps previous spacing/format */
+.copy{background:var(--copy-bg);color:var(--copy-text)}
+.badge{background:var(--badge-bg);color:var(--badge-text);padding:6px 10px;border-radius:999px;font-size:12px;margin-left:8px}
 </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <h1 style="margin:0">Subscribe to Calendars</h1>
-        <span id="count" class="badge"></span>
-      </div>
-
+      <h1>Subscribe to Calendars <span id="count" class="badge"></span></h1>
       <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
 
-      <div class="row controls">
-        <label for="calSel" class="sr-only" style="position:absolute;left:-9999px">Calendar</label>
+      <div class="row">
+        <label for="calSel" class="hidden">Calendar</label>
         <select id="calSel" aria-label="Choose calendar"></select>
         <button id="copyBtn" class="btn copy">Copy link</button>
       </div>
 
       <div class="row">
-        <button id="appleBtn"  class="btn apple">Apple Calendar</button>
+        <button id="appleBtn" class="btn apple">Apple Calendar</button>
         <button id="googleBtn" class="btn google">Google Calendar</button>
         <button id="olLiveBtn" class="btn outlook">Outlook (personal)</button>
         <button id="olWorkBtn" class="btn outlook">Outlook (work/school)</button>
@@ -365,74 +254,35 @@ select{
 
 <script>
 (async function(){
-  const sel = document.getElementById('calSel');
-  const copyBtn = document.getElementById('copyBtn');
-  const appleBtn = document.getElementById('appleBtn');
-  const googleBtn = document.getElementById('googleBtn');
-  const olLiveBtn = document.getElementById('olLiveBtn');
-  const olWorkBtn = document.getElementById('olWorkBtn');
-  const countEl = document.getElementById('count');
+  const sel=document.getElementById('calSel'),copyBtn=document.getElementById('copyBtn');
+  const appleBtn=document.getElementById('appleBtn'),googleBtn=document.getElementById('googleBtn');
+  const olLiveBtn=document.getElementById('olLiveBtn'),olWorkBtn=document.getElementById('olWorkBtn');
+  const countEl=document.getElementById('count');
 
   async function loadManifest(){
-    const url = new URL('calendars.json', location.href).href;
-    const res = await fetch(url, {cache:'no-store'});
-    if(!res.ok) throw new Error('Failed to load calendars.json');
-    return res.json();
+    const res=await fetch('calendars.json',{cache:'no-store'});
+    if(!res.ok) throw new Error('Failed'); return res.json();
   }
-
-  function absUrl(rel){ return new URL(rel, location.href).href; }
-  function currentIcsUrl(){
-    const slug = sel.value;
-    return absUrl('calendars/' + slug + '.ics');
-  }
+  function absUrl(rel){return new URL(rel,location.href).href;}
+  function currentIcsUrl(){return absUrl('calendars/'+sel.value+'.ics');}
   function setButtons(){
-    const ics = currentIcsUrl();
-    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
-    const enc = encodeURIComponent(ics);
-    // Apple (webcal)
-    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
-    // Google -> Add by URL screen (pre-fills cid)
-    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
-    // Outlook (personal)
-    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
-    // Outlook (work/school)
-    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    const ics=currentIcsUrl(),name=encodeURIComponent(sel.options[sel.selectedIndex].text),enc=encodeURIComponent(ics);
+    appleBtn.onclick=()=>location.href='webcal://'+ics.replace(/^https?:\/\//,'');
+    googleBtn.onclick=()=>window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid='+enc,'_blank');
+    olLiveBtn.onclick=()=>window.open('https://outlook.live.com/calendar/0/addfromweb?url='+enc+'&name='+name,'_blank');
+    olWorkBtn.onclick=()=>window.open('https://outlook.office.com/calendar/0/addfromweb?url='+enc+'&name='+name,'_blank');
   }
-
   try{
-    const calendars = await loadManifest();
-    countEl.textContent = calendars.length + ' available';
-    sel.innerHTML = '';
-    calendars.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.slug;
-      opt.textContent = c.name;
-      sel.appendChild(opt);
-    });
-    sel.addEventListener('change', setButtons);
-    setButtons();
-  }catch(e){
-    console.error(e);
-  }
-
-  copyBtn.onclick = async () => {
-    try{
-      await navigator.clipboard.writeText(currentIcsUrl());
-      copyBtn.textContent = 'Copied!';
-      setTimeout(() => copyBtn.textContent = 'Copy link', 1200);
-    }catch(e){
-      alert('Copy failed. Link:\\n' + currentIcsUrl());
-    }
-  };
+    const calendars=await loadManifest();countEl.textContent=calendars.length+' available';
+    sel.innerHTML='';calendars.forEach(c=>{const opt=document.createElement('option');opt.value=c.slug;opt.textContent=c.name;sel.appendChild(opt);});
+    sel.addEventListener('change',setButtons);setButtons();
+  }catch(e){}
+  copyBtn.onclick=async()=>{try{await navigator.clipboard.writeText(currentIcsUrl());copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent='Copy link',1200);}catch(e){alert('Copy failed.');}};
 })();
 </script>
 </body>
 </html>
 """
 
-with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
-    f.write(index_html)
-
-print("✅ Wrote", MANIFEST_PATH)
-print("✅ Wrote", INDEX_HTML_PATH)
-print("🎉 Build complete.")
+with open(INDEX_HTML_PATH,"w",encoding="utf-8") as f: f.write(index_html)
+print("✅ Wrote", MANIFEST_PATH); print("✅ Wrote", INDEX_HTML_PATH); print("🎉 Build complete.")
