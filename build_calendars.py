@@ -254,95 +254,199 @@ index_html = r"""<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Subscribe to Calendars</title>
 <style>
-:root {
-  --bg:       #f6f4e8;
-  --card:     #881228;
-  --text:     #ffffff;
-  --muted:    #f5f5f7;
+:root{
+  /* Palette (your choices) */
+  --bg:#f6f4e8;
+  --card:#881228;
+  --text:#ffffff;
+  --muted:#f5f5f7;
 
-  --apple-bg:   #f5f5f7;
-  --apple-text: #000000;
-  --google-bg:  #ea4335;
-  --google-text:#ffffff;
-  --outlook-bg: #0078d4;
-  --outlook-text:#ffffff;
+  --apple-bg:#f5f5f7;   --apple-text:#000000;
+  --google-bg:#ea4335;  --google-text:#ffffff;
+  --outlook-bg:#0078d4; --outlook-text:#ffffff;
 
-  --copy-bg:   #ffffff;
-  --copy-text: #000000;
-  --chevron:   #000000;
-  --dropdown-text: #000000;
+  --copy-bg:#ffffff;    --copy-text:#000000;
+  --dd-text:#000000;    --chev:#000000;
+
+  /* Sizes & spacing */
+  --radius:16px;
+  --gap:12px;
+  --control-h:48px;
+  --copy-w:96px;     /* fixed width for Copy link */
 }
-body {
-  background: var(--bg);
-  font-family: system-ui, sans-serif;
-  color: var(--text);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  margin: 0;
+
+/* Page */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  padding:40px 16px;
 }
-.card {
-  background: var(--card);
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-  text-align: center;
-  max-width: 640px;
+
+/* Card */
+.card{
+  width:min(1200px,100%);
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:0 18px 60px rgba(0,0,0,.25);
+  padding:28px;
 }
-h1 {
-  margin-top: 0;
-  font-size: 2rem;
-  color: var(--text);
+
+/* Title + sub */
+h1{margin:0 0 6px;font-size:clamp(22px,3.4vw,36px);letter-spacing:.3px}
+.lead{margin:0 0 18px;color:var(--muted);font-size:clamp(14px,2.3vw,18px)}
+.lead em{font-style:italic}
+
+/* Layout rows */
+.row{display:flex;flex-wrap:wrap;gap:var(--gap);align-items:center}
+
+/* Top row: dropdown + copy aligned on one line */
+.topline{
+  display:flex;align-items:center;gap:var(--gap);
+  margin-bottom:14px;
 }
-p {
-  color: var(--muted);
+
+/* Dropdown — wide and readable */
+select.calsel{
+  color:var(--dd-text);
+  background:#fff;
+  height:var(--control-h);
+  border-radius:12px;
+  border:2px solid #0b66e4; /* subtle highlight to match earlier look */
+  padding:0 2.4rem 0 14px;  /* space for chevron */
+  font-size:16px;
+  min-width:600px;          /* << keep it comfortably wide */
+  width:clamp(540px, 52vw, 760px); /* responsive width, wide on large screens */
+
+  /* Chevron */
+  appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23000'><path d='M7 10l5 5 5-5'/></svg>");
+  background-repeat:no-repeat;
+  background-size:16px;
+  background-position:right 0.9rem center; /* not all the way right */
 }
-select, button {
-  font-size: 16px;
-  padding: 0.6rem 1rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+
+/* Copy link button (fixed width = 96px) */
+#copyBtn{
+  height:var(--control-h);
+  width:var(--copy-w);
+  background:var(--copy-bg);
+  color:var(--copy-text);
+  border:none;border-radius:12px;
+  font-weight:800;font-size:16px;letter-spacing:.2px;
+  cursor:pointer;
 }
-.calsel {
-  color: var(--dropdown-text);
-  background: #fff;
-  appearance: none;
-  min-height: 48px;
-  padding-right: 2rem;
-  background-image: url("data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  background-size: 1rem;
+
+/* Brand buttons row */
+.btns .btn{
+  height:46px;
+  border:none;border-radius:12px;
+  padding:0 18px;
+  font-size:16px;font-weight:600;
+  cursor:pointer;
 }
-#copyBtn {
-  min-height: 48px;
-  width: 96px; /* fixed width */
-  font-size: 18px;
-  font-weight: 800;
-  background: var(--copy-bg);
-  color: var(--copy-text);
-  margin-left: 0.5rem;
-}
+.btn.apple  {background:var(--apple-bg);  color:var(--apple-text);}
+.btn.google {background:var(--google-bg); color:var(--google-text);}
+.btn.olpers {background:var(--outlook-bg);color:var(--outlook-text);}
+.btn.olwork {background:var(--outlook-bg);color:var(--outlook-text);}
 </style>
 </head>
 <body>
   <div class="card">
     <h1>Subscribe to Calendars</h1>
-    <div>
-      <select class="calsel" id="calendarSelect"></select>
-      <button id="copyBtn">Copy</button>
+    <p class="lead">Choose a calendar, then subscribe. Use <em>Copy link</em> to grab the raw ICS URL.</p>
+
+    <!-- Top line: dropdown + Copy link -->
+    <div class="topline">
+      <label class="sr-only" for="calSel">Calendar</label>
+      <select id="calSel" class="calsel" aria-label="Choose calendar"></select>
+      <button id="copyBtn" type="button">Copy</button>
     </div>
-    <div style="margin-top:1rem;">
-      <button style="background:var(--apple-bg);color:var(--apple-text);">Apple</button>
-      <button style="background:var(--google-bg);color:var(--google-text);">Google</button>
-      <button style="background:var(--outlook-bg);color:var(--outlook-text);">Outlook</button>
+
+    <!-- Brand buttons -->
+    <div class="row btns">
+      <button id="appleBtn"  class="btn apple"  type="button">Apple Calendar</button>
+      <button id="googleBtn" class="btn google" type="button">Google Calendar</button>
+      <button id="olLiveBtn" class="btn olpers" type="button">Outlook (personal)</button>
+      <button id="olWorkBtn" class="btn olwork" type="button">Outlook (work/school)</button>
     </div>
   </div>
+
+<script>
+(async function(){
+  const sel      = document.getElementById('calSel');
+  const copyBtn  = document.getElementById('copyBtn');
+  const appleBtn = document.getElementById('appleBtn');
+  const googleBtn= document.getElementById('googleBtn');
+  const olLiveBtn= document.getElementById('olLiveBtn');
+  const olWorkBtn= document.getElementById('olWorkBtn');
+
+  function absUrl(rel){ return new URL(rel, location.href).href; }
+  function currentIcsUrl(){
+    const slug = sel.value;
+    return absUrl('calendars/' + slug + '.ics');
+  }
+
+  async function loadManifest(){
+    const res = await fetch(absUrl('calendars.json'), {cache:'no-store'});
+    if(!res.ok) throw new Error('Failed to load calendars.json');
+    return res.json();
+  }
+
+  function setButtons(){
+    const ics  = currentIcsUrl();
+    const name = encodeURIComponent(sel.options[sel.selectedIndex].text);
+    const enc  = encodeURIComponent(ics);
+
+    // Apple calendar (webcal)
+    appleBtn.onclick  = () => location.href = 'webcal://' + ics.replace(/^https?:\/\//,'');
+    // Google "Add by URL" page (pre-populates the URL field)
+    googleBtn.onclick = () => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl?cid=' + enc, '_blank');
+    // Outlook (personal)
+    olLiveBtn.onclick = () => window.open('https://outlook.live.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+    // Outlook (work/school)
+    olWorkBtn.onclick = () => window.open('https://outlook.office.com/calendar/0/addfromweb?url=' + enc + '&name=' + name, '_blank');
+  }
+
+  // Populate dropdown
+  try{
+    const calendars = await loadManifest();
+    sel.innerHTML = '';
+    calendars.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.slug;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', setButtons);
+    setButtons();
+  }catch(e){
+    sel.innerHTML = '<option value="">(failed to load)</option>';
+  }
+
+  // Copy link
+  copyBtn.onclick = async () =>{
+    try{
+      await navigator.clipboard.writeText(currentIcsUrl());
+      const old = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(()=>copyBtn.textContent = old, 1200);
+    }catch{
+      alert('Copy failed. Link:\\n' + currentIcsUrl());
+    }
+  };
+})();
+</script>
 </body>
 </html>
 """
+
 
 with open(INDEX_HTML_PATH, "w", encoding="utf-8") as f:
     f.write(index_html)
